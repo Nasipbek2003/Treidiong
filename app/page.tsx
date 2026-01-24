@@ -28,8 +28,6 @@ export default function Home() {
   const [autoRefresh, setAutoRefresh] = useState(true);
   const [showTrendLines, setShowTrendLines] = useState(true);
   const [trendLines, setTrendLines] = useState<TrendLine[]>([]);
-  const [aiAnalyzing, setAiAnalyzing] = useState(false);
-  const [aiAnalysis, setAiAnalysis] = useState<string | null>(null);
   const loadingRef = useRef(false);
 
   const loadData = useCallback(async () => {
@@ -147,57 +145,6 @@ export default function Home() {
     return () => clearInterval(timer);
   }, [autoRefresh, asset, timeframe, loading]);
 
-  const handleAIAnalysis = async () => {
-    setAiAnalyzing(true);
-    setAiAnalysis(null);
-    
-    try {
-      // Делаем скриншот графика
-      const chartElement = document.querySelector('.chart-container canvas') as HTMLCanvasElement;
-      if (!chartElement) {
-        throw new Error('График не найден');
-      }
-      
-      const imageBase64 = chartElement.toDataURL('image/png').split(',')[1];
-      
-      // Отправляем на анализ ИИ
-      const response = await fetch('/api/visual-analysis', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          imageBase64,
-          action: 'ANALYZE',
-          context: {
-            asset: assetSymbols[asset]?.displayName || asset,
-            currentPrice: formatPrice(currentPrice, asset),
-            analysis,
-            indicators
-          }
-        })
-      });
-      
-      const data = await response.json();
-      
-      if (data.error) {
-        throw new Error(data.error);
-      }
-      
-      setAiAnalysis(data.response);
-      
-      // Парсим ответ ИИ и рисуем линии
-      if (data.lines && data.lines.length > 0) {
-        setTrendLines(data.lines);
-        setShowTrendLines(true);
-      }
-      
-    } catch (err: any) {
-      console.error('AI Analysis error:', err);
-      setAiAnalysis(`❌ Ошибка: ${err.message}`);
-    } finally {
-      setAiAnalyzing(false);
-    }
-  };
-
   if (loading) {
     return <div className="loading">⏳ Загрузка данных...</div>;
   }
@@ -222,7 +169,12 @@ export default function Home() {
   return (
     <>
       <div className="header">
-        <h1>📊 TradingView Pro</h1>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+          <svg width="32" height="32" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M21 21H4.6C4.03995 21 3.75992 21 3.54601 20.891C3.35785 20.7951 3.20487 20.6422 3.10899 20.454C3 20.2401 3 19.9601 3 19.4V3M21 7L15.5657 12.4343C15.3677 12.6323 15.2687 12.7313 15.1545 12.7684C15.0541 12.8011 14.9459 12.8011 14.8455 12.7684C14.7313 12.7313 14.6323 12.6323 14.4343 12.4343L12.5657 10.5657C12.3677 10.3677 12.2687 10.2687 12.1545 10.2316C12.0541 10.1989 11.9459 10.1989 11.8455 10.2316C11.7313 10.2687 11.6323 10.3677 11.4343 10.5657L7 15" stroke="#FF6D00" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+          </svg>
+          <h1>TradingView Pro</h1>
+        </div>
         <div className="toolbar">
           <select value={asset} onChange={(e) => setAsset(e.target.value)}>
             <optgroup label="Металлы">
@@ -269,20 +221,10 @@ export default function Home() {
           </select>
 
           <button className="btn btn-primary" onClick={loadData}>
-            🔄
-          </button>
-          
-          <button 
-            className="btn btn-success" 
-            onClick={handleAIAnalysis}
-            disabled={aiAnalyzing}
-            style={{
-              background: aiAnalyzing ? '#4a5568' : '#10b981',
-              color: '#fff',
-              cursor: aiAnalyzing ? 'not-allowed' : 'pointer'
-            }}
-          >
-            {aiAnalyzing ? '⏳ Анализ...' : '🤖 Анализ ИИ'}
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <path d="M1 4V10H7M23 20V14H17" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+              <path d="M20.49 9C19.9828 7.56678 19.1209 6.28536 17.9845 5.27541C16.8482 4.26546 15.4745 3.55976 13.9917 3.22426C12.5089 2.88875 10.9652 2.93434 9.50481 3.35677C8.04437 3.77921 6.71475 4.56471 5.64 5.64L1 10M23 14L18.36 18.36C17.2853 19.4353 15.9556 20.2208 14.4952 20.6432C13.0348 21.0657 11.4911 21.1112 10.0083 20.7757C8.52547 20.4402 7.1518 19.7345 6.01547 18.7246C4.87913 17.7146 4.01717 16.4332 3.51 15" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+            </svg>
           </button>
           
           <button 
@@ -306,21 +248,18 @@ export default function Home() {
               setShowTrendLines(!showTrendLines);
             }}
             style={{
-              background: showTrendLines ? '#2196f3' : '#2a2e39',
-              color: showTrendLines ? '#fff' : '#787b86'
+              background: showTrendLines ? '#FF6D00' : '#2a2e39',
+              color: showTrendLines ? '#fff' : '#787b86',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px'
             }}
           >
-            {showTrendLines ? '📈 Линии ВКЛ' : '📊 Линии ВЫКЛ'}
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <path d="M21 21H4.6C4.03995 21 3.75992 21 3.54601 20.891C3.35785 20.7951 3.20487 20.6422 3.10899 20.454C3 20.2401 3 19.9601 3 19.4V3M21 7L15.5657 12.4343C15.3677 12.6323 15.2687 12.7313 15.1545 12.7684C15.0541 12.8011 14.9459 12.8011 14.8455 12.7684C14.7313 12.7313 14.6323 12.6323 14.4343 12.4343L12.5657 10.5657C12.3677 10.3677 12.2687 10.2687 12.1545 10.2316C12.0541 10.1989 11.9459 10.1989 11.8455 10.2316C11.7313 10.2687 11.6323 10.3677 11.4343 10.5657L7 15" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+            </svg>
+            {showTrendLines ? 'Линии ВКЛ' : 'Линии ВЫКЛ'}
           </button>
-          
-          <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.9rem', whiteSpace: 'nowrap' }}>
-            <input 
-              type="checkbox" 
-              checked={autoRefresh}
-              onChange={(e) => setAutoRefresh(e.target.checked)}
-            />
-            Live
-          </label>
         </div>
       </div>
 
@@ -346,7 +285,6 @@ export default function Home() {
                 </h2>
                 <span style={{ fontSize: '0.85rem', color: '#787b86' }}>
                   {timeframe === '1min' ? '1m' : timeframe === '5min' ? '5m' : timeframe === '15min' ? '15m' : timeframe === '30min' ? '30m' : timeframe === '1h' ? '1h' : '4h'}
-                  {autoRefresh && ' • Live'}
                 </span>
               </div>
               <div className="price-display">
@@ -363,49 +301,6 @@ export default function Home() {
               trendLines={trendLines}
               showLines={showTrendLines}
             />
-            
-            {aiAnalysis && (
-              <div style={{
-                marginTop: '15px',
-                padding: '15px',
-                background: '#1e222d',
-                border: '1px solid #2a2e39',
-                borderRadius: '8px',
-                maxHeight: '300px',
-                overflowY: 'auto'
-              }}>
-                <div style={{ 
-                  display: 'flex', 
-                  justifyContent: 'space-between', 
-                  alignItems: 'center',
-                  marginBottom: '10px'
-                }}>
-                  <h3 style={{ margin: 0, fontSize: '1rem', color: '#10b981' }}>
-                    🤖 Анализ ИИ
-                  </h3>
-                  <button 
-                    onClick={() => setAiAnalysis(null)}
-                    style={{
-                      background: 'transparent',
-                      border: 'none',
-                      color: '#787b86',
-                      cursor: 'pointer',
-                      fontSize: '1.2rem'
-                    }}
-                  >
-                    ✕
-                  </button>
-                </div>
-                <div style={{ 
-                  fontSize: '0.9rem', 
-                  color: '#d1d4dc',
-                  whiteSpace: 'pre-wrap',
-                  lineHeight: '1.6'
-                }}>
-                  {aiAnalysis}
-                </div>
-              </div>
-            )}
           </div>
 
           <div className="indicators-grid">

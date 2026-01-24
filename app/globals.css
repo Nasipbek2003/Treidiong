@@ -29,7 +29,7 @@ body {
 
 .header h1 {
   font-size: 1.5rem;
-  color: #2962ff;
+  color: #FF6D00;
   margin: 0;
   font-weight: 600;
 }
@@ -123,12 +123,17 @@ body {
 }
 
 .btn-primary {
-  background: #2962ff;
+  background: #FF6D00;
   color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 10px 12px;
 }
 
 .btn-primary:hover {
-  background: #1e53e5;
+  background: #F57C00;
+  transform: translateY(-1px);
 }
 
 .btn-secondary {
@@ -253,10 +258,11 @@ select:focus {
 }
 
 .chat-message.user {
-  background: #2962ff;
+  background: #FF6D00;
   color: #fff;
   align-self: flex-end;
   margin-left: auto;
+  box-shadow: 0 2px 8px rgba(255, 109, 0, 0.2);
 }
 
 .chat-message.ai {
@@ -266,52 +272,140 @@ select:focus {
 }
 
 .chat-message strong {
-  color: #2962ff;
+  color: #FF6D00;
   font-weight: 600;
 }
 
 .chat-input-container {
   padding: 15px;
   border-top: 1px solid #2a2e39;
-  display: flex;
-  gap: 10px;
+  background: #1e222d;
 }
 
 .chat-input {
   flex: 1;
-  padding: 10px 12px;
-  border-radius: 4px;
-  border: 1px solid #2a2e39;
+  padding: 12px 14px;
+  border-radius: 8px;
+  border: 1px solid #363a45;
   background: #131722;
   color: #d1d4dc;
   font-size: 0.9rem;
   resize: none;
   font-family: inherit;
+  transition: all 0.2s;
 }
 
 .chat-input:focus {
   outline: none;
-  border-color: #2962ff;
+  border-color: #FF6D00;
+  box-shadow: 0 0 0 2px rgba(255, 109, 0, 0.1);
 }
 
 .chat-send-btn {
-  padding: 10px 20px;
-  background: #2962ff;
+  padding: 10px 16px;
+  background: #FF6D00;
   color: #fff;
   border: none;
-  border-radius: 4px;
+  border-radius: 8px;
   cursor: pointer;
   font-weight: 500;
-  transition: background 0.2s;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 48px;
+  height: 48px;
 }
 
 .chat-send-btn:hover:not(:disabled) {
-  background: #1e53e5;
+  background: #F57C00;
+  transform: translateY(-1px);
 }
 
 .chat-send-btn:disabled {
   opacity: 0.5;
   cursor: not-allowed;
+}
+
+.attach-btn {
+  padding: 10px;
+  background: #2a2e39;
+  color: #787b86;
+  border: 1px solid #363a45;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 48px;
+  height: 48px;
+}
+
+.attach-btn:hover:not(:disabled) {
+  background: #363a45;
+  color: #FF6D00;
+  border-color: #FF6D00;
+}
+
+.attach-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.analysis-btn {
+  flex: 1;
+  padding: 12px 16px;
+  border: none;
+  border-radius: 8px;
+  font-size: 0.9rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+.buy-btn {
+  background: #FF6D00;
+  color: #fff;
+}
+
+.buy-btn:hover:not(:disabled) {
+  background: #F57C00;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(255, 109, 0, 0.3);
+}
+
+.sell-btn {
+  background: #FF6D00;
+  color: #fff;
+}
+
+.sell-btn:hover:not(:disabled) {
+  background: #F57C00;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(255, 109, 0, 0.3);
+}
+
+.analysis-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.spinner {
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 .quick-btn {
