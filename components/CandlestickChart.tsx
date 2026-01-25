@@ -150,6 +150,13 @@ export default function CandlestickChart({ data, sma20, sma50, trendLines, showL
               console.error('[Chart] Invalid timestamp for:', dateStr);
               return null;
             }
+            
+            // Фильтруем выходные дни (суббота и воскресенье)
+            const dayOfWeek = parsedDate.getUTCDay();
+            if (dayOfWeek === 0 || dayOfWeek === 6) {
+              // 0 = воскресенье, 6 = суббота
+              return null;
+            }
           } else {
             time = dateStr;
           }
@@ -207,6 +214,12 @@ export default function CandlestickChart({ data, sma20, sma50, trendLines, showL
               const parsedDate = new Date(dateStr.replace(' ', 'T'));
               time = Math.floor(parsedDate.getTime() / 1000);
               if (isNaN(time) || time < 0) return null;
+              
+              // Фильтруем выходные дни
+              const dayOfWeek = parsedDate.getUTCDay();
+              if (dayOfWeek === 0 || dayOfWeek === 6) {
+                return null;
+              }
             } else {
               time = dateStr;
             }
@@ -247,6 +260,12 @@ export default function CandlestickChart({ data, sma20, sma50, trendLines, showL
               const parsedDate = new Date(dateStr.replace(' ', 'T'));
               time = Math.floor(parsedDate.getTime() / 1000);
               if (isNaN(time) || time < 0) return null;
+              
+              // Фильтруем выходные дни
+              const dayOfWeek = parsedDate.getUTCDay();
+              if (dayOfWeek === 0 || dayOfWeek === 6) {
+                return null;
+              }
             } else {
               time = dateStr;
             }
