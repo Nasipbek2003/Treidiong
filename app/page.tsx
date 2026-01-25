@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import dynamic from 'next/dynamic';
 import TechnicalIndicatorsCard from '@/components/TechnicalIndicators';
+import LiquidityIndicators from '@/components/LiquidityIndicators';
 import MarketAnalysisCard from '@/components/MarketAnalysis';
 import RiskCalculator from '@/components/RiskCalculator';
 import CorrelationMatrix from '@/components/CorrelationMatrix';
@@ -759,6 +760,11 @@ export default function Home() {
             </div>
             <div className="side-panel-content">
               <TechnicalIndicatorsCard indicators={indicators} />
+              <LiquidityIndicators 
+                symbol={asset}
+                candles={priceData}
+                currentPrice={currentPrice}
+              />
             </div>
           </div>
         )}
