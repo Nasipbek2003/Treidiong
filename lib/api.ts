@@ -8,6 +8,32 @@ const FRED_API_KEY = process.env.FRED_API_KEY || '';
 // Кеш для данных с использованием localStorage
 const CACHE_DURATION = 3600000; // 1 час
 
+// Проверка, работает ли рынок (для форекса - 24/5, закрыт в выходные)
+export function isMarketOpen(): boolean {
+  const now = new Date();
+  const utcDay = now.getUTCDay(); // 0 = Воскресенье, 6 = Суббота
+  const utcHour = now.getUTCHours();
+  
+  // Рынок форекс закрыт с пятницы 22:00 UTC до воскресенья 22:00 UTC
+  if (utcDay === 6) {
+    // Суббота - рынок закрыт весь день
+    return false;
+  }
+  
+  if (utcDay === 0 && utcHour < 22) {
+    // Воскресенье до 22:00 UTC - рынок закрыт
+    return false;
+  }
+  
+  if (utcDay === 5 && utcHour >= 22) {
+    // Пятница после 22:00 UTC - рынок закрыт
+    return false;
+  }
+  
+  // В остальное время рынок открыт
+  return true;
+}
+
 function getCachedData(key: string): { data: any; timestamp: number } | null {
   try {
     const cached = localStorage.getItem(`api_cache_${key}`);
@@ -28,6 +54,27 @@ function setCachedData(key: string, data: any): void {
     }));
   } catch (e) {
     console.error('Cache write error:', e);
+  }
+}
+
+// Функция для очистки кеша
+export function clearCache(key?: string): void {
+  try {
+    if (key) {
+      localStorage.removeItem(`api_cache_${key}`);
+      console.log(`[API] Cache cleared for ${key}`);
+    } else {
+      // Очищаем весь кеш API
+      const keys = Object.keys(localStorage);
+      keys.forEach(k => {
+        if (k.startsWith('api_cache_')) {
+          localStorage.removeItem(k);
+        }
+      });
+      console.log('[API] All API cache cleared');
+    }
+  } catch (e) {
+    console.error('Cache clear error:', e);
   }
 }
 
@@ -256,7 +303,12 @@ export async function fetchIntraday(symbol: string, interval: string = '5min'): 
     console.log(`[API] Fetching intraday: ${symbol} @ ${interval}`);
     console.log(`[API] Using key: ${TWELVE_DATA_KEY.substring(0, 8)}...`);
     
-    const outputsize = interval === '1min' ? 200 : 100;
+    // Определяем outputsize в зависимости от устройства
+    // На мобильных загружаем меньше данных для ускорения
+    const isMobile = typeof window !== 'undefined' && window.innerWidth < 768;
+    const outputsize = isMobile ? 500 : 5000; // Для мобильных - 500 свечей
+    
+    console.log(`[API] Device: ${isMobile ? 'Mobile' : 'Desktop'}, outputsize: ${outputsize}`);
     
     const url = `https://api.twelvedata.com/time_series?symbol=${symbol}&interval=${interval}&outputsize=${outputsize}&apikey=${TWELVE_DATA_KEY}`;
     console.log(`[API] Request URL: ${url.replace(TWELVE_DATA_KEY, 'KEY_HIDDEN')}`);

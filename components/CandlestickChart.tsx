@@ -26,6 +26,14 @@ export default function CandlestickChart({ data, sma20, sma50, trendLines, showL
   useEffect(() => {
     if (!chartContainerRef.current) return;
 
+    // Адаптивное расстояние между свечами в зависимости от ширины экрана
+    const containerWidth = chartContainerRef.current.clientWidth;
+    const isMobile = containerWidth < 768;
+    const barSpacing = isMobile ? 3 : 6; // На мобильных уменьшаем расстояние
+    
+    // Адаптивная высота графика
+    const chartHeight = isMobile ? window.innerHeight - 150 : window.innerHeight - 150;
+
     const chart = createChart(chartContainerRef.current, {
       layout: {
         background: { type: ColorType.Solid, color: '#1e222d' },
@@ -35,13 +43,13 @@ export default function CandlestickChart({ data, sma20, sma50, trendLines, showL
         vertLines: { color: '#2a2e39' },
         horzLines: { color: '#2a2e39' },
       },
-      width: chartContainerRef.current.clientWidth,
-      height: 500,
+      width: containerWidth,
+      height: chartHeight,
       timeScale: {
         borderColor: '#2a2e39',
         timeVisible: true,
         rightOffset: 12,
-        barSpacing: 6,
+        barSpacing: barSpacing,
         fixLeftEdge: false,
         fixRightEdge: false,
         lockVisibleTimeRangeOnResize: true,
@@ -92,8 +100,13 @@ export default function CandlestickChart({ data, sma20, sma50, trendLines, showL
 
     const handleResize = () => {
       if (chartContainerRef.current && chartRef.current) {
+        const containerWidth = chartContainerRef.current.clientWidth;
+        const isMobile = containerWidth < 768;
+        const chartHeight = isMobile ? window.innerHeight - 150 : window.innerHeight - 150;
+        
         chartRef.current.applyOptions({ 
-          width: chartContainerRef.current.clientWidth 
+          width: containerWidth,
+          height: chartHeight
         });
       }
     };
@@ -217,6 +230,9 @@ export default function CandlestickChart({ data, sma20, sma50, trendLines, showL
       if (sma20Data.length > 0) {
         sma20SeriesRef.current.setData(sma20Data as any);
       }
+    } else if (sma20SeriesRef.current) {
+      // Очищаем данные, если SMA20 отключен
+      sma20SeriesRef.current.setData([]);
     }
 
     // Обновляем SMA 50
@@ -254,6 +270,9 @@ export default function CandlestickChart({ data, sma20, sma50, trendLines, showL
       if (sma50Data.length > 0) {
         sma50SeriesRef.current.setData(sma50Data as any);
       }
+    } else if (sma50SeriesRef.current) {
+      // Очищаем данные, если SMA50 отключен
+      sma50SeriesRef.current.setData([]);
     }
 
     // Автомасштабирование только при первой загрузке или смене валютной пары

@@ -23,48 +23,109 @@ export default function AIChat({ priceData, indicators, analysis, currentPrice, 
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
+  const [version, setVersion] = useState<'nasip1.0' | 'nasip1.1'>('nasip1.0');
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const initializedRef = useRef(false);
+  const currentChatKeyRef = useRef<string>('');
 
-  // Загрузка истории из localStorage при монтировании
+  // Загрузка истории при изменении актива или версии
   useEffect(() => {
-    const savedMessages = localStorage.getItem(`chat_history_${asset}`);
-    if (savedMessages) {
-      try {
+    // Проверка на существование localStorage (для SSR)
+    if (typeof window === 'undefined') return;
+    
+    const chatKey = `chat_history_${asset}_${version}`;
+    
+    // Если это тот же чат, не перезагружаем
+    if (currentChatKeyRef.current === chatKey) {
+      return;
+    }
+    
+    console.log(`Loading chat for: ${chatKey}`);
+    currentChatKeyRef.current = chatKey;
+    
+    try {
+      const savedMessages = localStorage.getItem(chatKey);
+      if (savedMessages) {
         const parsed = JSON.parse(savedMessages);
+        console.log(`Loaded ${parsed.length} messages for ${chatKey}`);
         setMessages(parsed);
-        initializedRef.current = true;
-      } catch (e) {
-        console.error('Error loading chat history:', e);
+      } else {
+        // Если нет сохраненной истории, показываем приветствие
+        console.log(`No saved history for ${chatKey}, showing welcome message`);
+        setMessages([{
+          role: 'ai',
+          content: `Привет! Я AI-аналитик (${version}). Анализирую ${asset}. Цена: ${formatPrice(currentPrice, asset)}. Нажми ПОКУПКА или ПРОДАЖА для анализа точек входа.`
+        }]);
       }
-    }
-  }, [asset]);
-
-  // Сохранение истории в localStorage при изменении
-  useEffect(() => {
-    if (messages.length > 0) {
-      localStorage.setItem(`chat_history_${asset}`, JSON.stringify(messages));
-    }
-  }, [messages, asset]);
-
-  // Инициализация приветственного сообщения только один раз
-  useEffect(() => {
-    if (!initializedRef.current && messages.length === 0) {
+    } catch (e) {
+      console.error('Error loading chat history:', e);
+      // При ошибке показываем приветствие
       setMessages([{
         role: 'ai',
-        content: `Привет! Я AI-аналитик. Анализирую ${asset}. Цена: ${formatPrice(currentPrice, asset)}. Нажми ПОКУПКА или ПРОДАЖА для анализа точек входа.`
+        content: `Привет! Я AI-аналитик (${version}). Анализирую ${asset}. Цена: ${formatPrice(currentPrice, asset)}. Нажми ПОКУПКА или ПРОДАЖА для анализа точек входа.`
       }]);
-      initializedRef.current = true;
     }
-  }, [asset, currentPrice, messages.length]);
+  }, [asset, version, currentPrice]); // Вернули currentPrice для обновления цены в приветствии
+
+  // Сохранение истории в localStorage при изменении сообщений
+  useEffect(() => {
+    // Проверка на существование localStorage (для SSR)
+    if (typeof window === 'undefined') return;
+    
+    if (messages.length > 0 && currentChatKeyRef.current) {
+      const chatKey = currentChatKeyRef.current;
+      console.log(`Saving ${messages.length} messages to ${chatKey}`);
+      try {
+        localStorage.setItem(chatKey, JSON.stringify(messages));
+      } catch (e) {
+        console.error('Error saving chat history:', e);
+      }
+    }
+  }, [messages]);
+
+  // Функция очистки чата
+  const clearChat = () => {
+    if (typeof window === 'undefined') return;
+    
+    const chatKey = currentChatKeyRef.current;
+    console.log(`Clearing chat: ${chatKey}`);
+    try {
+      localStorage.removeItem(chatKey);
+      setMessages([{
+        role: 'ai',
+        content: `Привет! Я AI-аналитик (${version}). Анализирую ${asset}. Цена: ${formatPrice(currentPrice, asset)}. Нажми ПОКУПКА или ПРОДАЖА для анализа точек входа.`
+      }]);
+    } catch (e) {
+      console.error('Error clearing chat:', e);
+    }
+  };
+
+  // Отладка: показываем все сохраненные чаты при монтировании
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    
+    try {
+      const allChats: string[] = [];
+      for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i);
+        if (key && key.startsWith('chat_history_')) {
+          allChats.push(key);
+        }
+      }
+      if (allChats.length > 0) {
+        console.log('Saved chats:', allChats);
+      }
+    } catch (e) {
+      console.error('Error reading saved chats:', e);
+    }
+  }, []);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
   const visualAnalysis = async (action: 'BUY' | 'SELL') => {
-    setMessages(prev => [...prev, { role: 'user', content: `${action === 'BUY' ? 'Покупка' : 'Продажа'}` }]);
+    setMessages(prev => [...prev, { role: 'user', content: `${action === 'BUY' ? 'Покупка' : 'Продажа'} (${version})` }]);
     setLoading(true);
 
     try {
@@ -83,11 +144,13 @@ export default function AIChat({ priceData, indicators, analysis, currentPrice, 
         body: JSON.stringify({
           imageBase64,
           action: action,
+          version: version,
           context: {
             asset,
             currentPrice,
             indicators,
-            analysis
+            analysis,
+            priceData
           }
         })
       });
@@ -195,6 +258,7 @@ export default function AIChat({ priceData, indicators, analysis, currentPrice, 
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             message: userMessage,
+            version: version,
             context: {
               asset,
               currentPrice,
@@ -295,15 +359,102 @@ export default function AIChat({ priceData, indicators, analysis, currentPrice, 
   return (
     <div className="ai-chat">
       <div className="chat-header">
-        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-          <path d="M12 2L2 7L12 12L22 7L12 2Z" stroke="#FF6D00" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-          <path d="M2 17L12 22L22 17" stroke="#FF6D00" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-          <path d="M2 12L12 17L22 12" stroke="#FF6D00" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-        </svg>
-        <h3>AI Аналитик</h3>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flex: 1 }}>
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M12 2L2 7L12 12L22 7L12 2Z" stroke="#FF6D00" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+            <path d="M2 17L12 22L22 17" stroke="#FF6D00" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+            <path d="M2 12L12 17L22 12" stroke="#FF6D00" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+          </svg>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+            <h3 style={{ margin: 0 }}>AI Аналитик</h3>
+            <span style={{ fontSize: '0.75rem', color: '#787b86' }}>
+              {asset} • {version}
+            </span>
+          </div>
+        </div>
+        <button
+          onClick={clearChat}
+          style={{
+            background: 'transparent',
+            border: 'none',
+            color: '#787b86',
+            cursor: 'pointer',
+            padding: '4px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            transition: 'color 0.2s'
+          }}
+          onMouseEnter={(e) => e.currentTarget.style.color = '#ef5350'}
+          onMouseLeave={(e) => e.currentTarget.style.color = '#787b86'}
+          title="Очистить чат"
+        >
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M3 6H5H21" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+            <path d="M8 6V4C8 3.46957 8.21071 2.96086 8.58579 2.58579C8.96086 2.21071 9.46957 2 10 2H14C14.5304 2 15.0391 2.21071 15.4142 2.58579C15.7893 2.96086 16 3.46957 16 4V6M19 6V20C19 20.5304 18.7893 21.0391 18.4142 21.4142C18.0391 21.7893 17.5304 22 17 22H7C6.46957 22 5.96086 21.7893 5.58579 21.4142C5.21071 21.0391 5 20.5304 5 20V6H19Z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+          </svg>
+        </button>
       </div>
 
       <div style={{ padding: '12px 15px', borderBottom: '1px solid #2a2e39' }}>
+        <div style={{ display: 'flex', gap: '8px', marginBottom: '12px' }}>
+          <button
+            onClick={() => {
+              if (typeof window === 'undefined') return;
+              // Сохраняем текущий чат перед переключением
+              if (messages.length > 0 && currentChatKeyRef.current) {
+                try {
+                  localStorage.setItem(currentChatKeyRef.current, JSON.stringify(messages));
+                } catch (e) {
+                  console.error('Error saving before version switch:', e);
+                }
+              }
+              setVersion('nasip1.0');
+            }}
+            style={{
+              flex: 1,
+              padding: '6px 12px',
+              background: version === 'nasip1.0' ? '#FF6D00' : '#2a2e39',
+              color: version === 'nasip1.0' ? '#fff' : '#8b92a7',
+              border: 'none',
+              borderRadius: '6px',
+              fontSize: '12px',
+              fontWeight: version === 'nasip1.0' ? '600' : '400',
+              cursor: 'pointer',
+              transition: 'all 0.2s'
+            }}
+          >
+            nasip1.0
+          </button>
+          <button
+            onClick={() => {
+              if (typeof window === 'undefined') return;
+              // Сохраняем текущий чат перед переключением
+              if (messages.length > 0 && currentChatKeyRef.current) {
+                try {
+                  localStorage.setItem(currentChatKeyRef.current, JSON.stringify(messages));
+                } catch (e) {
+                  console.error('Error saving before version switch:', e);
+                }
+              }
+              setVersion('nasip1.1');
+            }}
+            style={{
+              flex: 1,
+              padding: '6px 12px',
+              background: version === 'nasip1.1' ? '#FF6D00' : '#2a2e39',
+              color: version === 'nasip1.1' ? '#fff' : '#8b92a7',
+              border: 'none',
+              borderRadius: '6px',
+              fontSize: '12px',
+              fontWeight: version === 'nasip1.1' ? '600' : '400',
+              cursor: 'pointer',
+              transition: 'all 0.2s'
+            }}
+          >
+            nasip1.1
+          </button>
+        </div>
         <div style={{ display: 'flex', gap: '10px' }}>
           <button 
             className="analysis-btn buy-btn"
