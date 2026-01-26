@@ -15,6 +15,32 @@ export async function POST(request: NextRequest) {
   try {
     const { message, action, context, version = 'nasip1.0' } = await request.json();
 
+    // 🔍 ЛОГИРОВАНИЕ ДЛЯ ОТЛАДКИ
+    console.log('\n=== AI CHAT REQUEST ===');
+    console.log('Asset:', context.asset);
+    console.log('Current Price:', context.currentPrice);
+    console.log('Price Data Length:', context.priceData?.length);
+    if (context.priceData && context.priceData.length > 0) {
+      const latest = context.priceData[context.priceData.length - 1];
+      const first = context.priceData[0];
+      console.log('Latest Candle:', {
+        date: latest.date,
+        open: latest.open,
+        high: latest.high,
+        low: latest.low,
+        close: latest.close
+      });
+      console.log('First Candle:', {
+        date: first.date,
+        close: first.close
+      });
+      console.log('Price Range:', {
+        min: Math.min(...context.priceData.map((d: any) => d.low)),
+        max: Math.max(...context.priceData.map((d: any) => d.high))
+      });
+    }
+    console.log('======================\n');
+
     // Анализируем последние 6 часов данных
     const recentData = context.priceData.slice(-72);
     const prices = recentData.map((d: any) => d.close);

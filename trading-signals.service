@@ -1,0 +1,20 @@
+[Unit]
+Description=Trading Signals System with Telegram Bot
+After=network.target
+
+[Service]
+Type=simple
+User=www-data
+WorkingDirectory=/var/www/trading-signals
+ExecStart=/usr/bin/node /var/www/trading-signals/server.js
+Restart=always
+RestartSec=10
+StandardOutput=append:/var/log/trading-signals/output.log
+StandardError=append:/var/log/trading-signals/error.log
+
+Environment=NODE_ENV=production
+Environment=TELEGRAM_BOT_TOKEN=8447919474:AAGNiBKj9HXJpzBvNLxOE14iR4mojVjva6w
+Environment=TELEGRAM_CHAT_ID=6254307002
+
+[Install]
+WantedBy=multi-user.target

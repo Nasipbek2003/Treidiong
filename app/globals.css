@@ -324,6 +324,17 @@ select:focus {
   }
 }
 
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.5;
+    transform: scale(1.2);
+  }
+}
+
 .side-panel-header {
   padding: 12px 15px;
   border-bottom: 1px solid #2a2e39;

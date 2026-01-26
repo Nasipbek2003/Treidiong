@@ -129,14 +129,46 @@ export default function AIChat({ priceData, indicators, analysis, currentPrice, 
     setLoading(true);
 
     try {
+      // 🔍 ПРОВЕРКА: Убедимся что priceData актуален
+      if (priceData && priceData.length > 0) {
+        const latestCandle = priceData[priceData.length - 1];
+        const priceDiff = Math.abs(latestCandle.close - currentPrice);
+        const priceDiffPercent = (priceDiff / currentPrice) * 100;
+        
+        console.log('📊 Проверка данных перед анализом:');
+        console.log('  Текущая цена:', currentPrice);
+        console.log('  Последняя свеча:', latestCandle.close);
+        console.log('  Разница:', priceDiff.toFixed(2), `(${priceDiffPercent.toFixed(2)}%)`);
+        
+        // Если разница больше 10% - данные устарели
+        if (priceDiffPercent > 10) {
+          setMessages(prev => [...prev, { 
+            role: 'ai', 
+            content: `⚠️ Данные устарели!\n\nГрафик показывает цены около $${latestCandle.close.toFixed(2)}, но текущая цена $${currentPrice.toFixed(2)}.\n\nОбнови страницу (F5) или нажми кнопку 🔄 для загрузки актуальных данных.` 
+          }]);
+          setLoading(false);
+          return;
+        }
+      }
+
+      // ⏱️ ВАЖНО: Ждем 500мс чтобы график успел перерисоваться
+      console.log('⏱️ Ожидание перерисовки графика...');
+      await new Promise(resolve => setTimeout(resolve, 500));
+
       // Находим canvas с графиком
       const canvas = document.querySelector('canvas') as HTMLCanvasElement;
       if (!canvas) {
         throw new Error('График не найден');
       }
 
+      console.log('📸 Создание скриншота графика...');
+      console.log('  Canvas размер:', canvas.width, 'x', canvas.height);
+
       // Конвертируем canvas в base64
       const imageBase64 = canvas.toDataURL('image/png').split(',')[1];
+      
+      console.log('✓ Скриншот создан, размер:', Math.round(imageBase64.length / 1024), 'KB');
+      console.log('📤 Отправка на анализ с ценой:', currentPrice);
 
       const response = await fetch('/api/visual-analysis', {
         method: 'POST',

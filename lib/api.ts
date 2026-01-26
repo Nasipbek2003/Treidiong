@@ -6,7 +6,7 @@ const ALPHA_VANTAGE_KEY = process.env.NEXT_PUBLIC_ALPHA_VANTAGE_API_KEY || '';
 const FRED_API_KEY = process.env.FRED_API_KEY || '';
 
 // Кеш для данных с использованием localStorage
-const CACHE_DURATION = 3600000; // 1 час
+const CACHE_DURATION = 60000; // 1 минута (было 1 час)
 
 // Проверка, работает ли рынок (для форекса - 24/5, закрыт в выходные)
 export function isMarketOpen(): boolean {
@@ -310,6 +310,7 @@ export async function fetchIntraday(symbol: string, interval: string = '5min'): 
     
     console.log(`[API] Device: ${isMobile ? 'Mobile' : 'Desktop'}, outputsize: ${outputsize}`);
     
+    // Запрос без timezone - используем время биржи
     const url = `https://api.twelvedata.com/time_series?symbol=${symbol}&interval=${interval}&outputsize=${outputsize}&apikey=${TWELVE_DATA_KEY}`;
     console.log(`[API] Request URL: ${url.replace(TWELVE_DATA_KEY, 'KEY_HIDDEN')}`);
     
@@ -359,6 +360,14 @@ export async function fetchIntraday(symbol: string, interval: string = '5min'): 
     console.log(`[API] Success! Got ${data.length} candles`);
     console.log(`[API] First candle:`, data[0]);
     console.log(`[API] Last candle:`, data[data.length - 1]);
+    
+    // 🔍 Проверка качества данных
+    const priceRange = {
+      min: Math.min(...data.map(d => d.low)),
+      max: Math.max(...data.map(d => d.high)),
+      latest: data[data.length - 1].close
+    };
+    console.log(`[API] Price range: $${priceRange.min.toFixed(2)} - $${priceRange.max.toFixed(2)}, Latest: $${priceRange.latest.toFixed(2)}`);
 
     // Сохраняем в кеш
     setCachedData(cacheKey, data);
@@ -396,21 +405,30 @@ export async function fetchIntraday(symbol: string, interval: string = '5min'): 
 
 export async function fetchLatestPrice(symbol: string): Promise<number> {
   try {
+    console.log(`[API] Fetching latest price for ${symbol}...`);
+    
     const response = await axios.get(
       `https://api.twelvedata.com/price`, {
         params: {
           symbol: symbol,
           apikey: TWELVE_DATA_KEY
-        }
+        },
+        timeout: 5000
       }
     );
 
+    if (response.data.status === 'error') {
+      throw new Error(response.data.message || 'API Error');
+    }
+
     if (response.data.price) {
-      return parseFloat(response.data.price);
+      const price = parseFloat(response.data.price);
+      console.log(`[API] Latest price: $${price.toFixed(2)}`);
+      return price;
     }
     throw new Error('No price data');
-  } catch (error) {
-    console.error('Latest price error:', error);
+  } catch (error: any) {
+    console.error('[API] Latest price error:', error.message);
     throw error;
   }
 }

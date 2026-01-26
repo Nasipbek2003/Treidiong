@@ -28,6 +28,7 @@ export default function Home() {
   const [error, setError] = useState<string | null>(null);
   const [timeframe, setTimeframe] = useState('15min');
   const [autoRefresh, setAutoRefresh] = useState(true);
+  const [lastUpdate, setLastUpdate] = useState<Date>(new Date());
   const [showTrendLines, setShowTrendLines] = useState(false);
   const [levelsStrength, setLevelsStrength] = useState<'weak' | 'medium' | 'strong' | null>(null);
   const [showLevelsMenu, setShowLevelsMenu] = useState(false);
@@ -203,6 +204,7 @@ export default function Home() {
       console.log(`Loaded ${data.length} candles, latest: ${formatPrice(data[data.length - 1]?.close, asset)}`);
       
       setPriceData(data);
+      setLastUpdate(new Date()); // Обновляем время последнего обновления
       
       const prices = data.map(d => d.close);
       const calculatedIndicators: TechnicalIndicators = {
@@ -272,8 +274,12 @@ export default function Home() {
       return;
     }
 
-    // Обновление цены каждые 5-15 секунд
-    const interval = timeframe === '5min' ? 5000 : timeframe === '15min' ? 10000 : 15000;
+    // 🔥 УМНОЕ ОБНОВЛЕНИЕ: 
+    // - Каждые 10 секунд обновляем только последнюю цену (быстро, без мерцания)
+    // - Каждые 2 минуты полная перезагрузка (новые свечи)
+    
+    let tickCount = 0;
+    const TICKS_BEFORE_FULL_RELOAD = 12; // 12 тиков * 10 сек = 2 минуты
     
     const timer = setInterval(async () => {
       // Проверяем перед каждым обновлением
@@ -283,10 +289,23 @@ export default function Home() {
         return;
       }
 
+      tickCount++;
+
       try {
         const symbol = assetSymbols[asset]?.twelve;
         if (!symbol) return;
 
+        // Каждые 2 минуты - полная перезагрузка
+        if (tickCount >= TICKS_BEFORE_FULL_RELOAD) {
+          console.log('🔄 Полная перезагрузка данных (новые свечи)...');
+          tickCount = 0;
+          clearCache(`${symbol}_${timeframe}`);
+          await loadData();
+          return;
+        }
+
+        // Обычное обновление - только последняя цена
+        console.log('💰 Обновление цены...');
         const latestPrice = await fetchLatestPrice(symbol);
         
         setPriceData(prev => {
@@ -304,20 +323,22 @@ export default function Home() {
           
           return [...prev.slice(0, -1), updatedCandle];
         });
+        
+        setLastUpdate(new Date());
+        
       } catch (err: any) {
-        console.error('Price update error:', err);
-        // Отключаем автообновление при любой ошибке
+        console.error('Auto-refresh error:', err);
+        // Отключаем автообновление при критических ошибках
         if (err.message?.includes('API_LIMIT_EXCEEDED') || 
-            err.message?.includes('run out of API credits') ||
-            err.message?.includes('Network Error')) {
+            err.message?.includes('run out of API credits')) {
           setAutoRefresh(false);
-          console.log('Автообновление отключено из-за ошибки');
+          console.log('Автообновление отключено из-за лимита API');
         }
       }
-    }, interval);
+    }, 10000); // Каждые 10 секунд
 
     return () => clearInterval(timer);
-  }, [autoRefresh, asset, timeframe, loading]);
+  }, [autoRefresh, asset, timeframe, loading, loadData]);
 
   if (loading) {
     return (
@@ -421,6 +442,30 @@ export default function Home() {
               <path d="M20.49 9C19.9828 7.56678 19.1209 6.28536 17.9845 5.27541C16.8482 4.26546 15.4745 3.55976 13.9917 3.22426C12.5089 2.88875 10.9652 2.93434 9.50481 3.35677C8.04437 3.77921 6.71475 4.56471 5.64 5.64L1 10M23 14L18.36 18.36C17.2853 19.4353 15.9556 20.2208 14.4952 20.6432C13.0348 21.0657 11.4911 21.1112 10.0083 20.7757C8.52547 20.4402 7.1518 19.7345 6.01547 18.7246C4.87913 17.7146 4.01717 16.4332 3.51 15" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
             </svg>
           </button>
+
+          {/* Индикатор последнего обновления */}
+          <div style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '6px',
+            padding: '6px 12px',
+            background: '#2a2e39',
+            borderRadius: '6px',
+            fontSize: '0.75rem',
+            color: '#787b86'
+          }}>
+            <div style={{
+              width: '6px',
+              height: '6px',
+              borderRadius: '50%',
+              background: autoRefresh ? '#26a69a' : '#787b86',
+              animation: autoRefresh ? 'pulse 2s infinite' : 'none'
+            }} />
+            {new Date().getTime() - lastUpdate.getTime() < 60000 
+              ? `${Math.floor((new Date().getTime() - lastUpdate.getTime()) / 1000)}s назад`
+              : `${Math.floor((new Date().getTime() - lastUpdate.getTime()) / 60000)}m назад`
+            }
+          </div>
           
           <button 
             className="btn btn-secondary" 
