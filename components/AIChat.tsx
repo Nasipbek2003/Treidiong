@@ -23,7 +23,8 @@ export default function AIChat({ priceData, indicators, analysis, currentPrice, 
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
-  const [version, setVersion] = useState<'nasip1.0' | 'nasip1.1'>('nasip1.0');
+  const [version, setVersion] = useState<'market-analysis' | 'signal-generator'>('market-analysis');
+  const [openSections, setOpenSections] = useState<{[key: string]: boolean}>({});
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const currentChatKeyRef = useRef<string>('');
@@ -151,8 +152,13 @@ export default function AIChat({ priceData, indicators, analysis, currentPrice, 
         }
       }
 
-      // ⏱️ ВАЖНО: Ждем 500мс чтобы график успел перерисоваться
-      console.log('⏱️ Ожидание перерисовки графика...');
+      // ⏱️ ВАЖНО: Принудительно перерисовываем график и ждем
+      console.log('⏱️ Принудительная перерисовка графика...');
+      
+      // Триггерим resize event чтобы график перерисовался
+      window.dispatchEvent(new Event('resize'));
+      
+      // Ждем 500мс чтобы график перерисовался
       await new Promise(resolve => setTimeout(resolve, 500));
 
       // Находим canvas с графиком
@@ -163,9 +169,30 @@ export default function AIChat({ priceData, indicators, analysis, currentPrice, 
 
       console.log('📸 Создание скриншота графика...');
       console.log('  Canvas размер:', canvas.width, 'x', canvas.height);
+      
+      // Проверяем что canvas не disposed и не пустой
+      let imageBase64: string;
+      try {
+        const ctx = canvas.getContext('2d', { willReadFrequently: true });
+        if (!ctx) {
+          throw new Error('Не удалось получить контекст canvas');
+        }
+        
+        // Проверяем что canvas содержит данные
+        try {
+          const imageData = ctx.getImageData(0, 0, Math.min(canvas.width, 1), Math.min(canvas.height, 1));
+          const hasData = imageData.data.some(pixel => pixel !== 0);
+          console.log('  Canvas содержит данные:', hasData);
+        } catch (e) {
+          console.warn('  Не удалось проверить данные canvas:', e);
+        }
 
-      // Конвертируем canvas в base64
-      const imageBase64 = canvas.toDataURL('image/png').split(',')[1];
+        // Конвертируем canvas в base64
+        imageBase64 = canvas.toDataURL('image/png').split(',')[1];
+      } catch (canvasError: any) {
+        console.error('Ошибка при работе с canvas:', canvasError);
+        throw new Error('График недоступен. Попробуйте еще раз через несколько секунд.');
+      }
       
       console.log('✓ Скриншот создан, размер:', Math.round(imageBase64.length / 1024), 'KB');
       console.log('📤 Отправка на анализ с ценой:', currentPrice);
@@ -196,9 +223,16 @@ export default function AIChat({ priceData, indicators, analysis, currentPrice, 
       setMessages(prev => [...prev, { role: 'ai', content: data.response }]);
     } catch (error: any) {
       console.error('Visual analysis error:', error);
+      
+      // Специальная обработка для ошибки disposed объекта
+      let errorMessage = error.message;
+      if (error.message && error.message.includes('disposed')) {
+        errorMessage = 'График обновляется. Пожалуйста, попробуйте еще раз через 2-3 секунды.';
+      }
+      
       setMessages(prev => [...prev, { 
         role: 'ai', 
-        content: `Ошибка визуального анализа: ${error.message}` 
+        content: `Ошибка: ${errorMessage}` 
       }]);
     } finally {
       setLoading(false);
@@ -327,6 +361,61 @@ export default function AIChat({ priceData, indicators, analysis, currentPrice, 
     }
   };
 
+  // Функция для парсинга сообщения на секции
+  const parseMessageSections = (content: string) => {
+    const sections: { title: string; content: string }[] = [];
+    
+    // Разбиваем по заголовкам (строки начинающиеся с **)
+    const lines = content.split('\n');
+    let currentSection: { title: string; content: string } | null = null;
+    
+    for (const line of lines) {
+      // Проверяем, является ли строка заголовком
+      const headerMatch = line.match(/^\*\*(.+?)\*\*$/);
+      
+      if (headerMatch) {
+        // Если есть текущая секция с контентом, сохраняем её
+        if (currentSection && currentSection.content.trim()) {
+          sections.push(currentSection);
+        }
+        // Начинаем новую секцию
+        currentSection = {
+          title: headerMatch[1].trim(),
+          content: ''
+        };
+      } else if (currentSection) {
+        // Добавляем контент к текущей секции
+        currentSection.content += (currentSection.content ? '\n' : '') + line;
+      }
+    }
+    
+    // Добавляем последнюю секцию, если у неё есть контент
+    if (currentSection && currentSection.content.trim()) {
+      sections.push(currentSection);
+    }
+    
+    return sections;
+  };
+
+  // Функция для переключения секции
+  const toggleSection = (messageIdx: number, sectionIdx: number) => {
+    const key = `${messageIdx}-${sectionIdx}`;
+    setOpenSections(prev => ({
+      ...prev,
+      [key]: !prev[key]
+    }));
+  };
+
+  // Проверка, открыта ли секция
+  const isSectionOpen = (messageIdx: number, sectionIdx: number) => {
+    const key = `${messageIdx}-${sectionIdx}`;
+    // Первая секция открыта по умолчанию
+    if (openSections[key] === undefined) {
+      return sectionIdx === 0;
+    }
+    return openSections[key];
+  };
+
   const handlePaste = (e: React.ClipboardEvent) => {
     const items = e.clipboardData?.items;
     if (!items) return;
@@ -441,22 +530,22 @@ export default function AIChat({ priceData, indicators, analysis, currentPrice, 
                   console.error('Error saving before version switch:', e);
                 }
               }
-              setVersion('nasip1.0');
+              setVersion('market-analysis');
             }}
             style={{
               flex: 1,
               padding: '6px 12px',
-              background: version === 'nasip1.0' ? '#FF6D00' : '#2a2e39',
-              color: version === 'nasip1.0' ? '#fff' : '#8b92a7',
+              background: version === 'market-analysis' ? '#FF6D00' : '#2a2e39',
+              color: version === 'market-analysis' ? '#fff' : '#8b92a7',
               border: 'none',
               borderRadius: '6px',
               fontSize: '12px',
-              fontWeight: version === 'nasip1.0' ? '600' : '400',
+              fontWeight: version === 'market-analysis' ? '600' : '400',
               cursor: 'pointer',
               transition: 'all 0.2s'
             }}
           >
-            nasip1.0
+            Анализ рынка
           </button>
           <button
             onClick={() => {
@@ -469,22 +558,22 @@ export default function AIChat({ priceData, indicators, analysis, currentPrice, 
                   console.error('Error saving before version switch:', e);
                 }
               }
-              setVersion('nasip1.1');
+              setVersion('signal-generator');
             }}
             style={{
               flex: 1,
               padding: '6px 12px',
-              background: version === 'nasip1.1' ? '#FF6D00' : '#2a2e39',
-              color: version === 'nasip1.1' ? '#fff' : '#8b92a7',
+              background: version === 'signal-generator' ? '#FF6D00' : '#2a2e39',
+              color: version === 'signal-generator' ? '#fff' : '#8b92a7',
               border: 'none',
               borderRadius: '6px',
               fontSize: '12px',
-              fontWeight: version === 'nasip1.1' ? '600' : '400',
+              fontWeight: version === 'signal-generator' ? '600' : '400',
               cursor: 'pointer',
               transition: 'all 0.2s'
             }}
           >
-            nasip1.1
+            Сигналы
           </button>
         </div>
         <div style={{ display: 'flex', gap: '10px' }}>
@@ -512,29 +601,120 @@ export default function AIChat({ priceData, indicators, analysis, currentPrice, 
       </div>
 
       <div className="chat-messages">
-        {messages.map((msg, idx) => (
-          <div key={idx} className={`chat-message ${msg.role}`}>
-            {msg.image && (
-              <div style={{ marginBottom: '8px' }}>
-                <img 
-                  src={msg.image} 
-                  alt="Uploaded" 
-                  style={{ 
-                    maxWidth: '100%', 
-                    maxHeight: '200px', 
-                    borderRadius: '8px',
-                    objectFit: 'contain'
-                  }} 
-                />
-              </div>
-            )}
-            <div dangerouslySetInnerHTML={{ 
-              __html: msg.content
-                .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
-                .replace(/\n/g, '<br/>')
-            }} />
-          </div>
-        ))}
+        {messages.map((msg, idx) => {
+          const sections = msg.role === 'ai' ? parseMessageSections(msg.content) : [];
+          
+          return (
+            <div key={idx} className={`chat-message ${msg.role}`}>
+              {msg.image && (
+                <div style={{ marginBottom: '8px' }}>
+                  <img 
+                    src={msg.image} 
+                    alt="Uploaded" 
+                    style={{ 
+                      maxWidth: '100%', 
+                      maxHeight: '200px', 
+                      borderRadius: '8px',
+                      objectFit: 'contain'
+                    }} 
+                  />
+                </div>
+              )}
+              
+              {msg.role === 'ai' && sections.length > 0 ? (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                  {sections.map((section, sectionIdx) => {
+                    const isOpen = isSectionOpen(idx, sectionIdx);
+                    const isFirstSection = sectionIdx === 0;
+                    // Определяем, является ли это сообщением с сигналами (содержит "ПОКУПАТЬ" или "ПРОДАВАТЬ")
+                    const isSignalMessage = msg.content.includes('ПОКУПАТЬ') || msg.content.includes('ПРОДАВАТЬ');
+                    
+                    return (
+                      <div 
+                        key={sectionIdx}
+                        style={{
+                          border: '1px solid #2a2e39',
+                          borderRadius: '8px',
+                          overflow: 'hidden',
+                          background: '#1e222d'
+                        }}
+                      >
+                        <button
+                          onClick={() => toggleSection(idx, sectionIdx)}
+                          style={{
+                            width: '100%',
+                            padding: '12px 16px',
+                            background: isOpen ? '#2a2e39' : 'transparent',
+                            border: 'none',
+                            color: '#fff',
+                            fontSize: '14px',
+                            fontWeight: '600',
+                            cursor: 'pointer',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'space-between',
+                            transition: 'background 0.2s'
+                          }}
+                          onMouseEnter={(e) => {
+                            if (!isOpen) e.currentTarget.style.background = '#252936';
+                          }}
+                          onMouseLeave={(e) => {
+                            if (!isOpen) e.currentTarget.style.background = 'transparent';
+                          }}
+                        >
+                          <span>
+                            {isFirstSection && isSignalMessage ? 'Сигналы' : section.title}
+                          </span>
+                          <svg 
+                            width="16" 
+                            height="16" 
+                            viewBox="0 0 24 24" 
+                            fill="none" 
+                            xmlns="http://www.w3.org/2000/svg"
+                            style={{
+                              transform: isOpen ? 'rotate(180deg)' : 'rotate(0deg)',
+                              transition: 'transform 0.2s'
+                            }}
+                          >
+                            <path 
+                              d="M6 9L12 15L18 9" 
+                              stroke="currentColor" 
+                              strokeWidth="2" 
+                              strokeLinecap="round" 
+                              strokeLinejoin="round"
+                            />
+                          </svg>
+                        </button>
+                        
+                        {isOpen && (
+                          <div 
+                            style={{ 
+                              padding: '16px',
+                              borderTop: '1px solid #2a2e39'
+                            }}
+                            dangerouslySetInnerHTML={{ 
+                              __html: section.content
+                                .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+                                .replace(/▸/g, '<span style="color: #FF6D00;">▸</span>')
+                                .replace(/•/g, '<span style="color: #FF6D00;">•</span>')
+                                .replace(/\n/g, '<br/>')
+                            }} 
+                          />
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : (
+                <div dangerouslySetInnerHTML={{ 
+                  __html: msg.content
+                    .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+                    .replace(/\n/g, '<br/>')
+                }} />
+              )}
+            </div>
+          );
+        })}
         {loading && (
           <div className="chat-message ai">
             <span style={{ opacity: 0.6 }}>Анализирую данные...</span>

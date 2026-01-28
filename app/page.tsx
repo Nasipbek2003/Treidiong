@@ -274,13 +274,7 @@ export default function Home() {
       return;
     }
 
-    // 🔥 УМНОЕ ОБНОВЛЕНИЕ: 
-    // - Каждые 10 секунд обновляем только последнюю цену (быстро, без мерцания)
-    // - Каждые 2 минуты полная перезагрузка (новые свечи)
-    
-    let tickCount = 0;
-    const TICKS_BEFORE_FULL_RELOAD = 12; // 12 тиков * 10 сек = 2 минуты
-    
+    // 💰 ТОЛЬКО ОБНОВЛЕНИЕ ЦЕНЫ: каждые 10 секунд обновляем последнюю цену
     const timer = setInterval(async () => {
       // Проверяем перед каждым обновлением
       if (!isMarketOpen()) {
@@ -289,22 +283,11 @@ export default function Home() {
         return;
       }
 
-      tickCount++;
-
       try {
         const symbol = assetSymbols[asset]?.twelve;
         if (!symbol) return;
 
-        // Каждые 2 минуты - полная перезагрузка
-        if (tickCount >= TICKS_BEFORE_FULL_RELOAD) {
-          console.log('🔄 Полная перезагрузка данных (новые свечи)...');
-          tickCount = 0;
-          clearCache(`${symbol}_${timeframe}`);
-          await loadData();
-          return;
-        }
-
-        // Обычное обновление - только последняя цена
+        // Обновление только последней цены
         console.log('💰 Обновление цены...');
         const latestPrice = await fetchLatestPrice(symbol);
         
@@ -338,7 +321,7 @@ export default function Home() {
     }, 10000); // Каждые 10 секунд
 
     return () => clearInterval(timer);
-  }, [autoRefresh, asset, timeframe, loading, loadData]);
+  }, [autoRefresh, asset, timeframe, loading]);
 
   if (loading) {
     return (
@@ -385,14 +368,14 @@ export default function Home() {
   return (
     <>
       <div className="header">
-        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexShrink: 0 }}>
           <svg width="32" height="32" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
             <path d="M21 21H4.6C4.03995 21 3.75992 21 3.54601 20.891C3.35785 20.7951 3.20487 20.6422 3.10899 20.454C3 20.2401 3 19.9601 3 19.4V3M21 7L15.5657 12.4343C15.3677 12.6323 15.2687 12.7313 15.1545 12.7684C15.0541 12.8011 14.9459 12.8011 14.8455 12.7684C14.7313 12.7313 14.6323 12.6323 14.4343 12.4343L12.5657 10.5657C12.3677 10.3677 12.2687 10.2687 12.1545 10.2316C12.0541 10.1989 11.9459 10.1989 11.8455 10.2316C11.7313 10.2687 11.6323 10.3677 11.4343 10.5657L7 15" stroke="#FF6D00" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
           </svg>
           <h1>TradingView Pro</h1>
         </div>
         <div className="toolbar">
-          <select value={asset} onChange={(e) => setAsset(e.target.value)}>
+          <select value={asset} onChange={(e) => setAsset(e.target.value)} title="Выбор актива">
             <optgroup label="Металлы">
               <option value="GOLD">XAU/USD - Золото</option>
               <option value="SILVER">XAG/USD - Серебро</option>
@@ -427,7 +410,7 @@ export default function Home() {
             </optgroup>
           </select>
           
-          <select value={timeframe} onChange={(e) => setTimeframe(e.target.value)}>
+          <select value={timeframe} onChange={(e) => setTimeframe(e.target.value)} title="Таймфрейм">
             <option value="1min">1m</option>
             <option value="5min">5m</option>
             <option value="15min">15m</option>
@@ -436,7 +419,7 @@ export default function Home() {
             <option value="4h">4h</option>
           </select>
 
-          <button className="btn btn-primary" onClick={() => loadData()}>
+          <button className="btn btn-primary" onClick={() => loadData()} title="Обновить данные">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
               <path d="M1 4V10H7M23 20V14H17" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
               <path d="M20.49 9C19.9828 7.56678 19.1209 6.28536 17.9845 5.27541C16.8482 4.26546 15.4745 3.55976 13.9917 3.22426C12.5089 2.88875 10.9652 2.93434 9.50481 3.35677C8.04437 3.77921 6.71475 4.56471 5.64 5.64L1 10M23 14L18.36 18.36C17.2853 19.4353 15.9556 20.2208 14.4952 20.6432C13.0348 21.0657 11.4911 21.1112 10.0083 20.7757C8.52547 20.4402 7.1518 19.7345 6.01547 18.7246C4.87913 17.7146 4.01717 16.4332 3.51 15" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
@@ -444,29 +427,6 @@ export default function Home() {
           </button>
 
           {/* Индикатор последнего обновления */}
-          <div style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: '6px',
-            padding: '6px 12px',
-            background: '#2a2e39',
-            borderRadius: '6px',
-            fontSize: '0.75rem',
-            color: '#787b86'
-          }}>
-            <div style={{
-              width: '6px',
-              height: '6px',
-              borderRadius: '50%',
-              background: autoRefresh ? '#26a69a' : '#787b86',
-              animation: autoRefresh ? 'pulse 2s infinite' : 'none'
-            }} />
-            {new Date().getTime() - lastUpdate.getTime() < 60000 
-              ? `${Math.floor((new Date().getTime() - lastUpdate.getTime()) / 1000)}s назад`
-              : `${Math.floor((new Date().getTime() - lastUpdate.getTime()) / 60000)}m назад`
-            }
-          </div>
-          
           <button 
             className="btn btn-secondary" 
             onClick={() => {
@@ -485,6 +445,7 @@ export default function Home() {
               ref={levelsButtonRef}
               className="btn btn-secondary" 
               onClick={toggleLevels}
+              title={showTrendLines ? `Уровни (${levelsStrength === 'weak' ? 'Слабый' : levelsStrength === 'medium' ? 'Средний' : 'Сильный'})` : 'Показать уровни'}
               style={{
                 background: showTrendLines ? '#FF6D00' : '#2a2e39',
                 color: showTrendLines ? '#fff' : '#787b86',
@@ -496,7 +457,7 @@ export default function Home() {
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
                 <path d="M21 21H4.6C4.03995 21 3.75992 21 3.54601 20.891C3.35785 20.7951 3.20487 20.6422 3.10899 20.454C3 20.2401 3 19.9601 3 19.4V3M21 7L15.5657 12.4343C15.3677 12.6323 15.2687 12.7313 15.1545 12.7684C15.0541 12.8011 14.9459 12.8011 14.8455 12.7684C14.7313 12.7313 14.6323 12.6323 14.4343 12.4343L12.5657 10.5657C12.3677 10.3677 12.2687 10.2687 12.1545 10.2316C12.0541 10.1989 11.9459 10.1989 11.8455 10.2316C11.7313 10.2687 11.6323 10.3677 11.4343 10.5657L7 15" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
               </svg>
-              {showTrendLines ? `Уровни (${levelsStrength === 'weak' ? 'Слабый' : levelsStrength === 'medium' ? 'Средний' : 'Сильный'})` : 'Уровни'}
+              <span className="btn-text">{showTrendLines ? `Уровни (${levelsStrength === 'weak' ? 'Слабый' : levelsStrength === 'medium' ? 'Средний' : 'Сильный'})` : 'Уровни'}</span>
             </button>
           </div>
 
@@ -505,6 +466,7 @@ export default function Home() {
               ref={indicatorsButtonRef}
               className="btn btn-secondary" 
               onClick={toggleIndicatorsMenu}
+              title="Индикаторы"
               style={{
                 background: (showSMA20 || showSMA50) ? '#2962ff' : '#2a2e39',
                 color: (showSMA20 || showSMA50) ? '#fff' : '#787b86',
@@ -516,7 +478,7 @@ export default function Home() {
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
                 <path d="M3 3V21M21 21H3M7 13L12 8L16 12L21 7" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
               </svg>
-              Индикаторы
+              <span className="btn-text">Индикаторы</span>
             </button>
             
             {showIndicatorsMenu && typeof window !== 'undefined' && createPortal(

@@ -46,6 +46,7 @@ export function customConfigExample() {
     minScore: 80, // Высокий порог
     enablePush: true,
     enableInApp: true,
+    activeSymbols: ['XAUUSD', 'BTCUSD'], // Добавляем обязательное поле
   };
 
   const notificationManager = new NotificationManager(preferences);

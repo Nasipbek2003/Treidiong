@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { LiquidityEngine } from '@/lib/liquidity';
 import { loadConfig } from '@/lib/liquidity/config';
 
+export const dynamic = 'force-dynamic';
+
 const engineInstance = new LiquidityEngine(loadConfig());
 
 export async function GET(request: NextRequest) {

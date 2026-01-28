@@ -121,71 +121,71 @@
     - Тест всех комбинаций невалидных условий
 
 - [ ] 6. Реализация StructureAnalyzer
-  - [~] 6.1 Создать класс StructureAnalyzer в `lib/liquidity/structure-analyzer.ts`
+  - [ ] 6.1 Создать класс StructureAnalyzer в `lib/liquidity/structure-analyzer.ts`
     - Реализовать метод `identifySwingPoints()` для поиска swing highs/lows
     - Реализовать метод `detectCHOCH()` для детекции Change of Character
     - Реализовать метод `detectBOS()` для детекции Break of Structure
     - Реализовать расчёт significance для структурных изменений
     - _Requirements: 4.1, 4.2, 4.3, 4.4, 4.5_
   
-  - [~] 6.2 Property test: CHOCH Detection
+  - [ ] 6.2 Property test: CHOCH Detection
     - **Property 10: CHOCH Detection**
     - **Validates: Requirements 4.1, 4.2**
     - Генерировать последовательности sweep high → lower high
     - Генерировать последовательности sweep low → higher low
     - Проверять детекцию CHOCH в правильном направлении
   
-  - [~] 6.3 Property test: BOS Detection
+  - [ ] 6.3 Property test: BOS Detection
     - **Property 11: BOS Detection**
     - **Validates: Requirements 4.3, 4.4**
     - Генерировать uptrend с пробоем последнего low
     - Генерировать downtrend с пробоем последнего high
     - Проверять детекцию BOS в правильном направлении
   
-  - [~] 6.4 Property test: Structure Change Data Persistence
+  - [ ] 6.4 Property test: Structure Change Data Persistence
     - **Property 12: Structure Change Data Persistence**
     - **Validates: Requirements 4.5**
     - Генерировать случайные CHOCH/BOS события
     - Проверять сохранение всех полей (type, direction, price)
   
-  - [~] 6.5 Unit tests для StructureAnalyzer
+  - [ ] 6.5 Unit tests для StructureAnalyzer
     - Тест с недостаточным количеством свечей для swing points
     - Тест CHOCH без предшествующего sweep
     - Тест BOS в range (не в тренде)
 
 - [ ] 7. Реализация SignalScorer
-  - [~] 7.1 Создать класс SignalScorer в `lib/liquidity/signal-scorer.ts`
+  - [ ] 7.1 Создать класс SignalScorer в `lib/liquidity/signal-scorer.ts`
     - Реализовать метод `calculateScore()` для расчёта итогового score
     - Реализовать метод `normalizeScore()` для нормализации в диапазон 0-100
     - Реализовать логику добавления баллов за каждый компонент (sweep, BOS, divergence, volume, HTF)
     - Реализовать формирование breakdown и components массива
     - _Requirements: 6.1, 6.2, 6.3, 6.4, 6.5, 6.6_
   
-  - [~] 7.2 Property test: Score Components Addition
+  - [ ] 7.2 Property test: Score Components Addition
     - **Property 16: Score Components Addition**
     - **Validates: Requirements 6.1, 6.2, 6.3, 6.4, 6.5**
     - Генерировать случайные комбинации компонентов сигнала
     - Проверять, что score = сумма баллов присутствующих компонентов
     - Проверять корректность breakdown
   
-  - [~] 7.3 Property test: Score Normalization
+  - [ ] 7.3 Property test: Score Normalization
     - **Property 17: Score Normalization**
     - **Validates: Requirements 6.6**
     - Генерировать случайные raw scores
     - Проверять, что нормализованный score в диапазоне [0, 100]
   
-  - [~] 7.4 Unit tests для SignalScorer
+  - [ ] 7.4 Unit tests для SignalScorer
     - Тест с нулевым score (нет компонентов)
     - Тест с максимальным score (все компоненты)
     - Тест с кастомными весами из конфигурации
 
-- [~] 8. Checkpoint - Основная логика завершена
+- [ ] 8. Checkpoint - Основная логика завершена
   - Убедиться, что все компоненты работают корректно
   - Проверить интеграцию между всеми компонентами
   - Спросить пользователя, если возникли вопросы
 
 - [ ] 9. Реализация LiquidityStore
-  - [~] 9.1 Создать класс LiquidityStore в `lib/liquidity/store.ts`
+  - [ ] 9.1 Создать класс LiquidityStore в `lib/liquidity/store.ts`
     - Реализовать in-memory хранилище для pools, sweeps, structure changes, signals
     - Реализовать методы `saveLiquidityPool()`, `getLiquidityPools()`, `updatePoolStatus()`
     - Реализовать методы `saveSweep()`, `getSweeps()`
@@ -194,43 +194,43 @@
     - Реализовать опциональную персистентность в файл (JSON)
     - _Requirements: 8.1, 8.2, 8.3, 8.4, 8.5_
   
-  - [~] 9.2 Property test: Liquidity Pool Persistence
+  - [ ] 9.2 Property test: Liquidity Pool Persistence
     - **Property 21: Liquidity Pool Persistence**
     - **Validates: Requirements 8.1**
     - Генерировать случайные pools
     - Проверять сохранение всех полей
   
-  - [~] 9.3 Property test: Sweep Status Update
+  - [ ] 9.3 Property test: Sweep Status Update
     - **Property 22: Sweep Status Update**
     - **Validates: Requirements 8.2**
     - Генерировать sweep события
     - Проверять обновление статуса pool и сохранение деталей
   
-  - [~] 9.4 Property test: Active Pools Filtering
+  - [ ] 9.4 Property test: Active Pools Filtering
     - **Property 23: Active Pools Filtering**
     - **Validates: Requirements 8.3**
     - Генерировать смесь active и swept pools
     - Проверять, что запрос возвращает только active pools
   
-  - [~] 9.5 Property test: Sweep History Chronological Order
+  - [ ] 9.5 Property test: Sweep History Chronological Order
     - **Property 24: Sweep History Chronological Order**
     - **Validates: Requirements 8.4**
     - Генерировать случайные sweeps в разное время
     - Проверять хронологический порядок в результате
   
-  - [~] 9.6 Property test: State Recovery After Restart
+  - [ ] 9.6 Property test: State Recovery After Restart
     - **Property 25: State Recovery After Restart**
     - **Validates: Requirements 8.5**
     - Сохранить состояние, "перезапустить" (создать новый экземпляр)
     - Проверять восстановление всех pools
   
-  - [~] 9.7 Unit tests для LiquidityStore
+  - [ ] 9.7 Unit tests для LiquidityStore
     - Тест обновления несуществующего pool
     - Тест concurrent updates
     - Тест персистентности в файл
 
 - [ ] 10. Реализация основного Liquidity Engine координатора
-  - [~] 10.1 Создать главный класс LiquidityEngine в `lib/liquidity/engine.ts`
+  - [ ] 10.1 Создать главный класс LiquidityEngine в `lib/liquidity/engine.ts`
     - Интегрировать все компоненты (Detector, SweepDetector, Validator, Analyzer, Scorer, Store)
     - Реализовать метод `analyze()` для полного анализа свечных данных
     - Реализовать метод `validateSignal()` для проверки внешних сигналов
@@ -238,98 +238,98 @@
     - Реализовать логику валидации условий входа (sweep → structure → retest)
     - _Requirements: 5.1, 5.2, 5.3, 5.4, 5.5_
   
-  - [~] 10.2 Property test: Signal Blocking Without Prerequisites
+  - [ ] 10.2 Property test: Signal Blocking Without Prerequisites
     - **Property 13: Signal Blocking Without Prerequisites**
     - **Validates: Requirements 5.1, 5.2**
     - Генерировать ситуации без sweep или без структурного подтверждения
     - Проверять блокировку генерации сигнала
   
-  - [~] 10.3 Property test: Valid Signal Generation
+  - [ ] 10.3 Property test: Valid Signal Generation
     - **Property 14: Valid Signal Generation**
     - **Validates: Requirements 5.3, 5.5**
     - Генерировать полные валидные последовательности
     - Проверять генерацию сигнала с правильным направлением
   
-  - [~] 10.4 Property test: Retest Detection
+  - [ ] 10.4 Property test: Retest Detection
     - **Property 15: Retest Detection**
     - **Validates: Requirements 5.4**
     - Генерировать движения цены с возвратом к зоне sweep
     - Проверять детекцию retest
   
-  - [~] 10.5 Property test: External Signal Filtering
+  - [ ] 10.5 Property test: External Signal Filtering
     - **Property 18: External Signal Filtering**
     - **Validates: Requirements 7.1, 7.2**
     - Генерировать внешние сигналы без подтверждения или с ложными пробоями
     - Проверять блокировку этих сигналов
   
-  - [~] 10.6 Property test: Valid Signal Propagation
+  - [ ] 10.6 Property test: Valid Signal Propagation
     - **Property 19: Valid Signal Propagation**
     - **Validates: Requirements 7.3, 7.4**
     - Генерировать валидные последовательности
     - Проверять передачу сигнала с score в существующую систему
   
-  - [~] 10.7 Integration tests для LiquidityEngine
+  - [ ] 10.7 Integration tests для LiquidityEngine
     - Тест полного цикла: данные → pools → sweep → structure → signal
     - Тест интеграции с существующими компонентами (lib/analysis.ts, lib/indicators.ts)
     - Тест обработки ошибок на каждом этапе
 
 - [ ] 11. Реализация LiquidityAPI (Next.js API routes)
-  - [~] 11.1 Создать API endpoint GET /api/liquidity/pools в `app/api/liquidity/pools/route.ts`
+  - [ ] 11.1 Создать API endpoint GET /api/liquidity/pools в `app/api/liquidity/pools/route.ts`
     - Обработка query parameters: symbol, status
     - Валидация входных данных
     - Возврат pools в JSON формате
     - Обработка ошибок
     - _Requirements: 9.1, 9.2_
   
-  - [~] 11.2 Создать API endpoint GET /api/liquidity/sweeps в `app/api/liquidity/sweeps/route.ts`
+  - [ ] 11.2 Создать API endpoint GET /api/liquidity/sweeps в `app/api/liquidity/sweeps/route.ts`
     - Обработка query parameters: symbol, startTime, endTime
     - Валидация входных данных
     - Возврат sweeps в JSON формате
     - _Requirements: 9.3_
   
-  - [~] 11.3 Создать API endpoint GET /api/liquidity/structure в `app/api/liquidity/structure/route.ts`
+  - [ ] 11.3 Создать API endpoint GET /api/liquidity/structure в `app/api/liquidity/structure/route.ts`
     - Обработка query parameter: symbol
     - Возврат structure changes и текущего тренда
     - _Requirements: 9.3_
   
-  - [~] 11.4 Создать API endpoint POST /api/liquidity/analyze в `app/api/liquidity/analyze/route.ts`
+  - [ ] 11.4 Создать API endpoint POST /api/liquidity/analyze в `app/api/liquidity/analyze/route.ts`
     - Обработка request body: symbol, candles, config
     - Запуск полного анализа через LiquidityEngine
     - Возврат pools, sweeps, structure changes, signal
     - _Requirements: 7.3, 7.4_
   
-  - [~] 11.5 Создать API endpoint GET /api/liquidity/signal в `app/api/liquidity/signal/route.ts`
+  - [ ] 11.5 Создать API endpoint GET /api/liquidity/signal в `app/api/liquidity/signal/route.ts`
     - Обработка query parameter: symbol
     - Возврат текущего торгового сигнала с валидацией
     - Возврат причин блокировки, если сигнал невалиден
     - _Requirements: 9.4_
   
-  - [~] 11.6 Property test: API Response Completeness
+  - [ ] 11.6 Property test: API Response Completeness
     - **Property 26: API Response Completeness**
     - **Validates: Requirements 9.1, 9.2**
     - Генерировать случайные запросы к API
     - Проверять полноту и валидность JSON response
   
-  - [~] 11.7 Property test: Sweep Details Completeness
+  - [ ] 11.7 Property test: Sweep Details Completeness
     - **Property 27: Sweep Details Completeness**
     - **Validates: Requirements 9.3**
     - Генерировать запросы деталей sweep
     - Проверять наличие всех полей (direction, wickSize, structure)
   
-  - [~] 11.8 Property test: Signal Response Completeness
+  - [ ] 11.8 Property test: Signal Response Completeness
     - **Property 28: Signal Response Completeness**
     - **Validates: Requirements 9.4**
     - Генерировать запросы сигнала
     - Проверять наличие score, direction, reasoning
   
-  - [~] 11.9 Unit tests для API endpoints
+  - [ ] 11.9 Unit tests для API endpoints
     - Тест некорректных query parameters
     - Тест отсутствующих обязательных параметров
     - Тест timeout handling
     - Тест error responses
 
 - [ ] 12. Реализация визуализации на графике
-  - [~] 12.1 Обновить компонент CandlestickChart.tsx
+  - [ ] 12.1 Обновить компонент CandlestickChart.tsx
     - Добавить отображение liquidity pools (горизонтальные линии с метками)
     - Добавить отображение liquidity sweeps (маркеры на свечах)
     - Добавить отображение structure changes (CHOCH/BOS маркеры)
@@ -337,53 +337,53 @@
     - Добавить легенду для всех элементов ликвидности
     - _Requirements: 7.5_
   
-  - [~] 12.2 Property test: Visualization Data Completeness
+  - [ ] 12.2 Property test: Visualization Data Completeness
     - **Property 20: Visualization Data Completeness**
     - **Validates: Requirements 7.5**
     - Генерировать запросы данных для визуализации
     - Проверять наличие всех pools, sweeps, structure changes с координатами
   
-  - [~] 12.3 Unit tests для визуализации
+  - [ ] 12.3 Unit tests для визуализации
     - Тест отрисовки с пустыми данными
     - Тест отрисовки с большим количеством pools (performance)
     - Тест корректности координат
 
 - [ ] 13. Реализация конфигурации
-  - [~] 13.1 Создать файл конфигурации `lib/liquidity/config.ts`
+  - [ ] 13.1 Создать файл конфигурации `lib/liquidity/config.ts`
     - Определить default конфигурацию (tolerance, minWickSize, volumeSpikeMultiplier, scoreWeights, htfTimeframes)
     - Реализовать функцию `loadConfig()` для загрузки кастомной конфигурации
     - Реализовать валидацию конфигурации
     - _Requirements: 10.1, 10.2, 10.3, 10.4, 10.5_
   
-  - [~] 13.2 Property test: Configuration Parameter Usage
+  - [ ] 13.2 Property test: Configuration Parameter Usage
     - **Property 29: Configuration Parameter Usage**
     - **Validates: Requirements 10.1, 10.2, 10.3, 10.4, 10.5**
     - Генерировать случайные значения параметров конфигурации
     - Проверять, что система использует эти значения при вычислениях
   
-  - [~] 13.3 Unit tests для конфигурации
+  - [ ] 13.3 Unit tests для конфигурации
     - Тест с некорректными значениями (negative, NaN)
     - Тест с отсутствующими параметрами (fallback на defaults)
     - Тест валидации конфигурации
 
 - [ ] 14. Интеграция с существующей системой анализа
-  - [~] 14.1 Обновить lib/analysis.ts
+  - [ ] 14.1 Обновить lib/analysis.ts
     - Добавить импорт LiquidityEngine
     - Интегрировать liquidity analysis в существующий анализ
     - Добавить фильтрацию сигналов через Liquidity Engine
     - Добавить агрегацию liquidity score с другими индикаторами
     - _Requirements: 7.1, 7.2, 7.3, 7.4_
   
-  - [~] 14.2 Обновить lib/indicators.ts
+  - [ ] 14.2 Обновить lib/indicators.ts
     - Добавить liquidity-based индикаторы в общий набор
     - Обеспечить совместимость с существующими индикаторами
   
-  - [~] 14.3 Integration tests для полной системы
+  - [ ] 14.3 Integration tests для полной системы
     - Тест генерации сигнала с учётом всех индикаторов + liquidity
     - Тест блокировки ложных сигналов через liquidity filter
     - Тест агрегации scores из разных источников
 
-- [~] 15. Финальный checkpoint и документация
+- [ ] 15. Финальный checkpoint и документация
   - Убедиться, что все тесты проходят (unit + property + integration)
   - Проверить code coverage (минимум 80%)
   - Запустить performance benchmarks

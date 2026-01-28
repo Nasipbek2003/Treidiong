@@ -523,7 +523,7 @@ ${probabilityScore.factors.join('\n')}
 
     const response = await anthropic.messages.create({
       model: 'claude-sonnet-4-20250514',
-      max_tokens: 600,
+      max_tokens: 1500, // Увеличено с 600 для полных ответов
       temperature: 0.3,
       messages: [
         {

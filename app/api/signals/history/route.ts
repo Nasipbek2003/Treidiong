@@ -7,6 +7,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { signalSystem } from '@/lib/signals/init';
 
+export const dynamic = 'force-dynamic';
+
 /**
  * GET /api/signals/history - История уведомлений
  */

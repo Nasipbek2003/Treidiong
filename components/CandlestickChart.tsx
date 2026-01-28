@@ -307,6 +307,15 @@ export default function CandlestickChart({ data, sma20, sma50, trendLines, showL
       return;
     }
 
+    // Проверяем что график не был уничтожен
+    try {
+      // Пытаемся получить timeScale - если график уничтожен, будет ошибка
+      chartRef.current.timeScale();
+    } catch (e) {
+      console.debug('Chart is disposed, skipping line drawing');
+      return;
+    }
+
     const lineSeriesArray: ISeriesApi<'Line'>[] = [];
     const priceLines: any[] = [];
 
@@ -375,18 +384,26 @@ export default function CandlestickChart({ data, sma20, sma50, trendLines, showL
       // Cleanup: удаляем созданные серии линий
       lineSeriesArray.forEach(series => {
         try {
-          chartRef.current?.removeSeries(series);
+          // Проверяем что график еще существует перед удалением
+          if (chartRef.current && series) {
+            chartRef.current.removeSeries(series);
+          }
         } catch (e) {
-          console.error('Error removing line series:', e);
+          // Игнорируем ошибки при cleanup - график может быть уже уничтожен
+          console.debug('Line series cleanup skipped:', e);
         }
       });
       
       // Cleanup: удаляем горизонтальные линии
       priceLines.forEach(priceLine => {
         try {
-          candlestickSeriesRef.current?.removePriceLine(priceLine);
+          // Проверяем что серия свечей еще существует перед удалением
+          if (candlestickSeriesRef.current && priceLine) {
+            candlestickSeriesRef.current.removePriceLine(priceLine);
+          }
         } catch (e) {
-          console.error('Error removing price line:', e);
+          // Игнорируем ошибки при cleanup - график может быть уже уничтожен
+          console.debug('Price line cleanup skipped:', e);
         }
       });
     };
