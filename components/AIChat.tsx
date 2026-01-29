@@ -3,6 +3,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { TechnicalIndicators, MarketAnalysis, PriceData } from '@/types';
 import { formatPrice } from '@/lib/formatPrice';
+import { formatCurrentSessionInfo, getCurrentTradingSessions } from '@/lib/tradingSessions';
 
 interface Message {
   role: 'user' | 'ai';
@@ -28,8 +29,9 @@ export default function AIChat({ priceData, indicators, analysis, currentPrice, 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const currentChatKeyRef = useRef<string>('');
+  const analysisPromiseRef = useRef<Promise<any> | null>(null);
 
-  // Загрузка истории при изменении актива или версии
+  // Загрузка истории и состояния загрузки при изменении актива или версии
   useEffect(() => {
     // Проверка на существование localStorage (для SSR)
     if (typeof window === 'undefined') return;
@@ -46,6 +48,8 @@ export default function AIChat({ priceData, indicators, analysis, currentPrice, 
     
     try {
       const savedMessages = localStorage.getItem(chatKey);
+      const savedLoading = localStorage.getItem(`${chatKey}_loading`);
+      
       if (savedMessages) {
         const parsed = JSON.parse(savedMessages);
         console.log(`Loaded ${parsed.length} messages for ${chatKey}`);
@@ -57,6 +61,12 @@ export default function AIChat({ priceData, indicators, analysis, currentPrice, 
           role: 'ai',
           content: `Привет! Я AI-аналитик (${version}). Анализирую ${asset}. Цена: ${formatPrice(currentPrice, asset)}. Нажми ПОКУПКА или ПРОДАЖА для анализа точек входа.`
         }]);
+      }
+      
+      // Восстанавливаем состояние загрузки
+      if (savedLoading === 'true') {
+        console.log(`Restoring loading state for ${chatKey}`);
+        setLoading(true);
       }
     } catch (e) {
       console.error('Error loading chat history:', e);
@@ -83,6 +93,20 @@ export default function AIChat({ priceData, indicators, analysis, currentPrice, 
       }
     }
   }, [messages]);
+
+  // Сохранение состояния loading в localStorage
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    
+    if (currentChatKeyRef.current) {
+      const chatKey = currentChatKeyRef.current;
+      try {
+        localStorage.setItem(`${chatKey}_loading`, loading.toString());
+      } catch (e) {
+        console.error('Error saving loading state:', e);
+      }
+    }
+  }, [loading]);
 
   // Функция очистки чата
   const clearChat = () => {
@@ -319,6 +343,9 @@ export default function AIChat({ priceData, indicators, analysis, currentPrice, 
         setMessages(prev => [...prev, { role: 'ai', content: data.response }]);
       } else {
         // Обычное текстовое сообщение
+        const currentSessions = getCurrentTradingSessions();
+        const sessionInfo = formatCurrentSessionInfo();
+        
         const response = await fetch('/api/chat', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -330,7 +357,12 @@ export default function AIChat({ priceData, indicators, analysis, currentPrice, 
               currentPrice,
               priceData: priceData.slice(-10),
               indicators,
-              analysis
+              analysis,
+              tradingSession: {
+                current: sessionInfo,
+                activeSessions: currentSessions.map(s => s.displayName),
+                isOverlap: currentSessions.length > 1
+              }
             }
           })
         });
@@ -490,6 +522,7 @@ export default function AIChat({ priceData, indicators, analysis, currentPrice, 
             <h3 style={{ margin: 0 }}>AI Аналитик</h3>
             <span style={{ fontSize: '0.75rem', color: '#787b86' }}>
               {asset} • {version}
+              {loading && <span style={{ color: '#FF6D00', marginLeft: '8px' }}>• Анализирую...</span>}
             </span>
           </div>
         </div>
@@ -626,9 +659,123 @@ export default function AIChat({ priceData, indicators, analysis, currentPrice, 
                   {sections.map((section, sectionIdx) => {
                     const isOpen = isSectionOpen(idx, sectionIdx);
                     const isFirstSection = sectionIdx === 0;
-                    // Определяем, является ли это сообщением с сигналами (содержит "ПОКУПАТЬ" или "ПРОДАВАТЬ")
-                    const isSignalMessage = msg.content.includes('ПОКУПАТЬ') || msg.content.includes('ПРОДАВАТЬ');
+                    // Определяем новый формат (nasip1.1) - содержит "Торговый сценарий"
+                    const isNewFormat = msg.content.includes('Торговый сценарий');
+                    // Старый формат с сигналами
+                    const isOldSignalMessage = msg.content.includes('ПОКУПАТЬ') || msg.content.includes('ПРОДАВАТЬ');
                     
+                    // Для нового формата: первая секция всегда открыта и показывает краткую версию
+                    // Остальные секции скрыты под "Подробнее"
+                    if (isNewFormat && isFirstSection) {
+                      return (
+                        <div key={sectionIdx}>
+                          {/* Краткая версия - всегда видна */}
+                          <div 
+                            style={{
+                              border: '1px solid #2a2e39',
+                              borderRadius: '8px',
+                              padding: '16px',
+                              background: '#1e222d'
+                            }}
+                            dangerouslySetInnerHTML={{ 
+                              __html: section.content
+                                .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+                                .replace(/▸/g, '<span style="color: #FF6D00;">▸</span>')
+                                .replace(/•/g, '<span style="color: #FF6D00;">•</span>')
+                                .replace(/\n/g, '<br/>')
+                            }} 
+                          />
+                          
+                          {/* Кнопка "Подробнее" для остальных секций */}
+                          {sections.length > 1 && (
+                            <button
+                              onClick={() => toggleSection(idx, 1)} // Переключаем вторую секцию как индикатор
+                              style={{
+                                width: '100%',
+                                marginTop: '8px',
+                                padding: '12px 16px',
+                                background: isSectionOpen(idx, 1) ? '#2a2e39' : '#1e222d',
+                                border: '1px solid #2a2e39',
+                                borderRadius: '8px',
+                                color: '#FF6D00',
+                                fontSize: '14px',
+                                fontWeight: '600',
+                                cursor: 'pointer',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                gap: '8px',
+                                transition: 'all 0.2s'
+                              }}
+                              onMouseEnter={(e) => {
+                                e.currentTarget.style.background = '#252936';
+                              }}
+                              onMouseLeave={(e) => {
+                                e.currentTarget.style.background = isSectionOpen(idx, 1) ? '#2a2e39' : '#1e222d';
+                              }}
+                            >
+                              <span>{isSectionOpen(idx, 1) ? 'Скрыть детали' : 'Подробнее'}</span>
+                              <svg 
+                                width="16" 
+                                height="16" 
+                                viewBox="0 0 24 24" 
+                                fill="none" 
+                                xmlns="http://www.w3.org/2000/svg"
+                                style={{
+                                  transform: isSectionOpen(idx, 1) ? 'rotate(180deg)' : 'rotate(0deg)',
+                                  transition: 'transform 0.2s'
+                                }}
+                              >
+                                <path 
+                                  d="M6 9L12 15L18 9" 
+                                  stroke="currentColor" 
+                                  strokeWidth="2" 
+                                  strokeLinecap="round" 
+                                  strokeLinejoin="round"
+                                />
+                              </svg>
+                            </button>
+                          )}
+                        </div>
+                      );
+                    }
+                    
+                    // Для нового формата: остальные секции показываем только если открыто
+                    if (isNewFormat && !isFirstSection) {
+                      if (!isSectionOpen(idx, 1)) return null; // Скрываем если не открыто
+                      
+                      return (
+                        <div 
+                          key={sectionIdx}
+                          style={{
+                            border: '1px solid #2a2e39',
+                            borderRadius: '8px',
+                            padding: '16px',
+                            background: '#1e222d'
+                          }}
+                        >
+                          <div style={{ 
+                            fontWeight: '600', 
+                            marginBottom: '12px',
+                            color: '#fff',
+                            fontSize: '14px'
+                          }}>
+                            {section.title}
+                          </div>
+                          <div 
+                            dangerouslySetInnerHTML={{ 
+                              __html: section.content
+                                .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+                                .replace(/▸/g, '<span style="color: #FF6D00;">▸</span>')
+                                .replace(/•/g, '<span style="color: #FF6D00;">•</span>')
+                                .replace(/\n/g, '<br/>')
+                            }} 
+                          />
+                        </div>
+                      );
+                    }
+                    
+                    // Старый формат - оставляем как было
                     return (
                       <div 
                         key={sectionIdx}
@@ -663,7 +810,7 @@ export default function AIChat({ priceData, indicators, analysis, currentPrice, 
                           }}
                         >
                           <span>
-                            {isFirstSection && isSignalMessage ? 'Сигналы' : section.title}
+                            {isFirstSection && isOldSignalMessage ? 'Сигналы' : section.title}
                           </span>
                           <svg 
                             width="16" 

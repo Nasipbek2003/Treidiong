@@ -11,24 +11,40 @@ import {
 export interface EntryPoint {
   type: 'Консервативный' | 'Умеренный' | 'Агрессивный';
   entryPrice: number;
-  probability: number;
   stopLoss: number;
   takeProfit: number;
   riskReward: number;
   description: string;
+  confidence: number; // Уверенность в точке входа (0-100)
+  probability?: number; // Алиас для confidence (для обратной совместимости)
+}
+
+export interface TargetProbability {
+  price: number;
+  probability: number; // Реальная вероятность достижения на основе всех факторов
+  reasoning: string;
 }
 
 export interface ProbabilityScore {
   signal: 'BUY' | 'SELL' | 'HOLD';
-  probability: number;
+  overallConfidence: number; // Общая уверенность в сигнале (0-100)
+  probability?: number; // Алиас для overallConfidence (для обратной совместимости)
   factors: string[];
   entryPoints: EntryPoint[];
+  targets: TargetProbability[]; // Цели с реальными вероятностями
   prediction: {
     direction: 'UP' | 'DOWN' | 'SIDEWAYS';
     targetPrice: number;
     reversalPoint: number;
     timeframe: string;
     reason: string;
+  };
+  breakdown: {
+    technical: number; // 0-30
+    liquidity: number; // 0-25
+    structure: number; // 0-20
+    session: number; // 0-10
+    triangle: number; // 0-15
   };
 }
 
@@ -38,343 +54,417 @@ export function calculateProbability(
   currentPrice: number,
   support: number[],
   resistance: number[],
-  priceData: PriceData[]
+  priceData: PriceData[],
+  liquidityData?: {
+    hasValidSetup: boolean;
+    signal: any;
+    sweeps: any[];
+    structures: any[];
+    pools: any[];
+  },
+  triangleData?: {
+    isValid: boolean;
+    hasBreakout: boolean;
+    hasRetest: boolean;
+    compressionRatio: number;
+  },
+  session?: 'ASIAN' | 'LONDON' | 'NEW_YORK' | 'OVERLAP'
 ): ProbabilityScore {
   const factors: string[] = [];
-  let bullishCount = 0; // Сколько критериев за покупку
-  let bearishCount = 0; // Сколько критериев за продажу
-  const totalCriteria = 10; // Всего критериев
+  
+  // Breakdown scores
+  let technicalScore = 0; // max 30
+  let liquidityScore = 0; // max 25
+  let structureScore = 0; // max 20
+  let sessionScore = 0; // max 10
+  let triangleScore = 0; // max 15
+  
+  // === ТЕХНИЧЕСКИЙ АНАЛИЗ (0-30) ===
 
-  // 1. RSI (10%)
+  // === ТЕХНИЧЕСКИЙ АНАЛИЗ (0-30) ===
+  
+  // RSI (0-10)
   if (indicators.rsi < 30) {
-    bullishCount++;
-    factors.push(`✅ RSI ${indicators.rsi.toFixed(1)} перепродан`);
+    technicalScore += 10;
+    factors.push(`✅ RSI ${indicators.rsi.toFixed(1)} перепродан (+10)`);
   } else if (indicators.rsi > 70) {
-    bearishCount++;
+    technicalScore += 0; // Для SELL это будет +10
     factors.push(`❌ RSI ${indicators.rsi.toFixed(1)} перекуплен`);
   } else if (indicators.rsi >= 40 && indicators.rsi <= 60) {
-    bullishCount += 0.5;
-    factors.push(`⚪ RSI ${indicators.rsi.toFixed(1)} нейтрален`);
+    technicalScore += 5;
+    factors.push(`⚪ RSI ${indicators.rsi.toFixed(1)} нейтрален (+5)`);
   } else {
-    factors.push(`⚪ RSI ${indicators.rsi.toFixed(1)}`);
+    technicalScore += 3;
+    factors.push(`⚪ RSI ${indicators.rsi.toFixed(1)} (+3)`);
   }
 
-  // 2. MACD (10%)
+  // MACD (0-10)
   if (indicators.macd.histogram > 0) {
-    bullishCount++;
-    factors.push('✅ MACD бычий');
+    technicalScore += 10;
+    factors.push('✅ MACD бычий (+10)');
   } else {
-    bearishCount++;
+    technicalScore += 0;
     factors.push('❌ MACD медвежий');
   }
 
-  // 3. Тренд (10%)
+  // Тренд (0-10)
   if (analysis.trend === 'bullish') {
-    bullishCount++;
-    factors.push('✅ Восходящий тренд');
+    technicalScore += 10;
+    factors.push('✅ Восходящий тренд (+10)');
   } else if (analysis.trend === 'bearish') {
-    bearishCount++;
+    technicalScore += 0;
     factors.push('❌ Нисходящий тренд');
   } else {
-    factors.push('⚪ Боковой тренд');
+    technicalScore += 5;
+    factors.push('⚪ Боковой тренд (+5)');
   }
 
-  // 4. Скользящие средние (10%)
-  if (indicators.sma20 > indicators.sma50) {
-    bullishCount++;
-    factors.push('✅ SMA20 > SMA50');
-  } else {
-    bearishCount++;
-    factors.push('❌ SMA20 < SMA50');
-  }
-
-  // 5. Волатильность (10%)
-  if (analysis.volatility < 15) {
-    bullishCount += 0.5;
-    factors.push(`✅ Низкая волатильность ${analysis.volatility.toFixed(1)}%`);
-  } else if (analysis.volatility > 30) {
-    bearishCount += 0.3;
-    factors.push(`⚠️ Высокая волатильность ${analysis.volatility.toFixed(1)}%`);
-  }
-
-  // 6. Volume & Money Flow (10%)
-  const volumes = priceData.map(d => d.volume);
-  const prices = priceData.map(d => d.close);
-  const volumeSMA = calculateVolumeSMA(volumes);
-  const currentVolume = volumes[volumes.length - 1];
-  const cvd = calculateCVD(priceData);
-  const prevCVD = calculateCVD(priceData.slice(0, -5));
-  
-  if (isVolumeSpike(currentVolume, volumeSMA)) {
-    const priceUp = prices[prices.length - 1] > prices[prices.length - 2];
-    if (priceUp) {
-      bullishCount++;
-      factors.push('✅ 📊 Объем подтверждает рост');
+  // === ЛИКВИДНОСТЬ (0-25) ===
+  if (liquidityData) {
+    if (liquidityData.hasValidSetup && liquidityData.signal) {
+      const signalScore = liquidityData.signal.score.totalScore;
+      liquidityScore = Math.min(25, (signalScore / 100) * 25);
+      factors.push(`✅ Liquidity Engine Score: ${signalScore.toFixed(1)}/100 (+${liquidityScore.toFixed(1)})`);
+      
+      // Детали
+      if (liquidityData.sweeps.length > 0) {
+        const latestSweep = liquidityData.sweeps[liquidityData.sweeps.length - 1];
+        factors.push(`  • Sweep на ${latestSweep.sweepPrice.toFixed(2)} (фитиль ${(latestSweep.wickSize * 100).toFixed(0)}%)`);
+      }
+      
+      if (liquidityData.structures.length > 0) {
+        const latestStructure = liquidityData.structures[liquidityData.structures.length - 1];
+        factors.push(`  • ${latestStructure.type} ${latestStructure.direction === 'up' ? '⬆️' : '⬇️'}`);
+      }
     } else {
-      bearishCount++;
-      factors.push('❌ 📊 Объем без роста цены');
-    }
-  } else if (currentVolume < volumeSMA * 0.7) {
-    const priceUp = prices[prices.length - 1] > prices[prices.length - 2];
-    if (priceUp) {
-      bearishCount++;
-      factors.push('❌ 📊 Рост без объема (фейк)');
-    } else {
-      bearishCount += 0.5;
-      factors.push('⚠️ 📊 Падение без объема');
-    }
-  }
-  
-  // 7. CVD (10%)
-  const cvdGrowing = cvd > prevCVD;
-  const priceGrowing = prices[prices.length - 1] > prices[prices.length - 6];
-  
-  if (cvdGrowing && priceGrowing) {
-    bullishCount++;
-    factors.push('✅ 💰 CVD растет с ценой');
-  } else if (!cvdGrowing && priceGrowing) {
-    bearishCount++;
-    factors.push('❌ 💰 CVD падает, цена растет (разгрузка)');
-  }
-
-  // 8. Liquidity Sweep (10%)
-  const liquiditySweep = detectLiquiditySweep(priceData);
-  
-  if (liquiditySweep.isSweep) {
-    if (liquiditySweep.direction === 'DOWN' && indicators.rsi > 50) {
-      bullishCount++;
-      factors.push('✅ 🎯 Сбор стопов вниз → разворот вверх');
-    } else if (liquiditySweep.direction === 'UP' && indicators.rsi < 50) {
-      bearishCount++;
-      factors.push('❌ 🎯 Сбор стопов вверх → разворот вниз');
-    } else {
-      bearishCount += 0.5;
-      factors.push('⚠️ 🎯 Ложный пробой');
+      factors.push(`⚠️ Liquidity Engine: нет валидного сетапа`);
+      if (liquidityData.signal?.score) {
+        const signalScore = liquidityData.signal.score.totalScore;
+        liquidityScore = Math.min(15, (signalScore / 100) * 15);
+        factors.push(`  • Score: ${signalScore.toFixed(1)}/100 (недостаточно)`);
+      }
     }
   }
 
-  // 9. Market Structure (10%)
+  // === СТРУКТУРА РЫНКА (0-20) ===
   const structure = analyzeMarketStructure(priceData);
-  
   if (structure.breakOfStructure === 'UP') {
-    bullishCount++;
-    factors.push(`✅ 📈 Break of Structure вверх (${structure.type})`);
+    structureScore += 20;
+    factors.push(`✅ Break of Structure вверх (${structure.type}) (+20)`);
   } else if (structure.breakOfStructure === 'DOWN') {
-    bearishCount++;
-    factors.push(`❌ 📉 Break of Structure вниз (${structure.type})`);
-  } else if (structure.type === 'RANGE') {
-    factors.push('⚪ ↔️ Рынок в диапазоне');
+    structureScore += 0;
+    factors.push(`❌ Break of Structure вниз (${structure.type})`);
+  } else if (structure.type === 'HH' || structure.type === 'HL') {
+    structureScore += 15;
+    factors.push(`✅ Бычья структура (${structure.type}) (+15)`);
+  } else if (structure.type === 'LH' || structure.type === 'LL') {
+    structureScore += 0;
+    factors.push(`❌ Медвежья структура (${structure.type})`);
   } else {
-    factors.push(`⚪ 📊 Структура: ${structure.type}`);
+    structureScore += 10;
+    factors.push(`⚪ Боковая структура (+10)`);
   }
 
-  // 10. Multi-Timeframe (10%)
-  const htfTrend = getHigherTimeframeTrend(priceData, 12);
-  const currentTrendBullish = analysis.trend === 'bullish';
-  
-  if (currentTrendBullish && htfTrend === 'bullish') {
-    bullishCount++;
-    factors.push('✅ ⏰ 5m и 1H совпадают (BUY)');
-  } else if (!currentTrendBullish && htfTrend === 'bearish') {
-    bearishCount++;
-    factors.push('❌ ⏰ 5m и 1H совпадают (SELL)');
-  } else if (currentTrendBullish && htfTrend === 'bearish') {
-    bearishCount += 0.5;
-    factors.push('⚠️ ⏰ 5m BUY, но 1H SELL');
-  } else if (!currentTrendBullish && htfTrend === 'bullish') {
-    bullishCount += 0.5;
-    factors.push('⚠️ ⏰ 5m SELL, но 1H BUY');
+  // === ТОРГОВАЯ СЕССИЯ (0-10) ===
+  if (session) {
+    if (session === 'OVERLAP') {
+      sessionScore = 10;
+      factors.push(`✅ OVERLAP сессия - лучшее время (+10)`);
+    } else if (session === 'LONDON' || session === 'NEW_YORK') {
+      sessionScore = 7;
+      factors.push(`✅ ${session} сессия - хорошее время (+7)`);
+    } else {
+      sessionScore = 3;
+      factors.push(`⚠️ ASIAN сессия - низкая волатильность (+3)`);
+    }
   }
 
-  // Рассчитываем вероятность: каждый критерий = 10%
-  const bullishProbability = Math.round((bullishCount / totalCriteria) * 100);
-  const bearishProbability = Math.round((bearishCount / totalCriteria) * 100);
+  // === ТРЕУГОЛЬНИК (0-15) ===
+  if (triangleData && triangleData.isValid) {
+    if (triangleData.hasBreakout && triangleData.hasRetest) {
+      triangleScore = 15;
+      factors.push(`✅ Треугольник: Пробой + Ретест (+15) - 85% вероятность!`);
+    } else if (triangleData.hasBreakout) {
+      triangleScore = 10;
+      factors.push(`✅ Треугольник: Пробой без ретеста (+10) - жди ретест`);
+    } else {
+      triangleScore = 5;
+      factors.push(`⚪ Треугольник обнаружен (+5) - жди пробоя`);
+    }
+    
+    if (triangleData.compressionRatio < 0.7) {
+      factors.push(`  • Хорошее сжатие (${(triangleData.compressionRatio * 100).toFixed(0)}%)`);
+    }
+  }
 
-  // Логирование для отладки
-  if (typeof window !== 'undefined') {
-    console.log('🎲 Расчет вероятности:', {
-      'Бычьих критериев': bullishCount,
-      'Медвежьих критериев': bearishCount,
-      'Бычья вероятность': `${bullishProbability}%`,
-      'Медвежья вероятность': `${bearishProbability}%`,
-      'Топ-8 факторов': factors.slice(0, 8)
+  // === ОБЩИЙ SCORE ===
+  const totalScore = technicalScore + liquidityScore + structureScore + sessionScore + triangleScore;
+  const maxScore = 100;
+  const overallConfidence = Math.min(100, (totalScore / maxScore) * 100);
+
+  // === ОПРЕДЕЛЕНИЕ СИГНАЛА ===
+  let signal: 'BUY' | 'SELL' | 'HOLD';
+  if (overallConfidence >= 60) {
+    signal = 'BUY';
+  } else if (overallConfidence < 40) {
+    signal = 'SELL';
+  } else {
+    signal = 'HOLD';
+  }
+
+  // === РАСЧЕТ ТОЧЕК ВХОДА ===
+  const nearSupport = support[0] || currentPrice * 0.99;
+  const midSupport = support[1] || currentPrice * 0.985;
+  const farSupport = support[2] || currentPrice * 0.97;
+  const nearResistance = resistance[0] || currentPrice * 1.02;
+
+  const entryPoints: EntryPoint[] = [];
+
+  if (signal === 'BUY') {
+    // Агрессивный вход
+    entryPoints.push({
+      type: 'Агрессивный',
+      entryPrice: currentPrice,
+      stopLoss: nearSupport * 0.995,
+      takeProfit: nearResistance,
+      riskReward: (nearResistance - currentPrice) / (currentPrice - nearSupport * 0.995),
+      description: 'Вход по текущей цене - максимальный потенциал',
+      confidence: Math.min(100, overallConfidence),
+      probability: Math.min(100, overallConfidence)
+    });
+
+    // Умеренный вход
+    entryPoints.push({
+      type: 'Умеренный',
+      entryPrice: nearSupport,
+      stopLoss: midSupport * 0.995,
+      takeProfit: nearResistance,
+      riskReward: (nearResistance - nearSupport) / (nearSupport - midSupport * 0.995),
+      description: 'Вход от первой поддержки - баланс риска и прибыли',
+      confidence: Math.min(100, overallConfidence + 10),
+      probability: Math.min(100, overallConfidence + 10)
+    });
+
+    // Консервативный вход
+    entryPoints.push({
+      type: 'Консервативный',
+      entryPrice: midSupport,
+      stopLoss: farSupport * 0.995,
+      takeProfit: nearResistance,
+      riskReward: (nearResistance - midSupport) / (midSupport - farSupport * 0.995),
+      description: 'Вход от второй поддержки - минимальный риск',
+      confidence: Math.min(100, overallConfidence + 20),
+      probability: Math.min(100, overallConfidence + 20)
+    });
+  } else if (signal === 'SELL') {
+    const nearResistanceLevel = resistance[0] || currentPrice * 1.01;
+    const midResistanceLevel = resistance[1] || currentPrice * 1.015;
+    const farResistanceLevel = resistance[2] || currentPrice * 1.03;
+
+    // Агрессивный вход
+    entryPoints.push({
+      type: 'Агрессивный',
+      entryPrice: currentPrice,
+      stopLoss: nearResistanceLevel * 1.005,
+      takeProfit: nearSupport,
+      riskReward: (currentPrice - nearSupport) / (nearResistanceLevel * 1.005 - currentPrice),
+      description: 'Вход по текущей цене - максимальный потенциал',
+      confidence: Math.min(100, overallConfidence),
+      probability: Math.min(100, overallConfidence)
+    });
+
+    // Умеренный вход
+    entryPoints.push({
+      type: 'Умеренный',
+      entryPrice: nearResistanceLevel,
+      stopLoss: midResistanceLevel * 1.005,
+      takeProfit: nearSupport,
+      riskReward: (nearResistanceLevel - nearSupport) / (midResistanceLevel * 1.005 - nearResistanceLevel),
+      description: 'Вход от первого сопротивления - баланс риска и прибыли',
+      confidence: Math.min(100, overallConfidence + 10),
+      probability: Math.min(100, overallConfidence + 10)
+    });
+
+    // Консервативный вход
+    entryPoints.push({
+      type: 'Консервативный',
+      entryPrice: midResistanceLevel,
+      stopLoss: farResistanceLevel * 1.005,
+      takeProfit: nearSupport,
+      riskReward: (midResistanceLevel - nearSupport) / (farResistanceLevel * 1.005 - midResistanceLevel),
+      description: 'Вход от второго сопротивления - минимальный риск',
+      confidence: Math.min(100, overallConfidence + 20),
+      probability: Math.min(100, overallConfidence + 20)
     });
   }
 
-  let signal: 'BUY' | 'SELL' | 'HOLD';
-  let probability: number;
+  // === РАСЧЕТ ЦЕЛЕЙ С РЕАЛЬНЫМИ ВЕРОЯТНОСТЯМИ ===
+  const targets: TargetProbability[] = [];
+  
+  if (signal === 'BUY') {
+    const target1 = nearResistance;
+    const target2 = resistance[1] || currentPrice * 1.03;
+    const target3 = resistance[2] || currentPrice * 1.05;
 
-  if (bullishProbability >= 60) {
-    signal = 'BUY';
-    probability = bullishProbability;
-  } else if (bearishProbability >= 60) {
-    signal = 'SELL';
-    probability = bearishProbability;
-  } else {
-    signal = 'HOLD';
-    probability = Math.max(bullishProbability, bearishProbability);
+    // Вероятность цели 1 = базовая уверенность
+    let target1Prob = overallConfidence;
+    
+    // Корректировки на основе факторов
+    if (liquidityData?.hasValidSetup) target1Prob += 10;
+    if (triangleData?.hasBreakout && triangleData?.hasRetest) target1Prob += 15;
+    if (session === 'OVERLAP') target1Prob += 5;
+    
+    targets.push({
+      price: target1,
+      probability: Math.min(95, target1Prob),
+      reasoning: 'Первое сопротивление - высокая вероятность достижения'
+    });
+
+    // Вероятность цели 2 = 70% от цели 1
+    let target2Prob = target1Prob * 0.7;
+    if (structure.type === 'HH') target2Prob += 5;
+    
+    targets.push({
+      price: target2,
+      probability: Math.min(85, target2Prob),
+      reasoning: 'Второе сопротивление - средняя вероятность'
+    });
+
+    // Вероятность цели 3 = 50% от цели 1
+    let target3Prob = target1Prob * 0.5;
+    
+    targets.push({
+      price: target3,
+      probability: Math.min(70, target3Prob),
+      reasoning: 'Третье сопротивление - требует сильного импульса'
+    });
+  } else if (signal === 'SELL') {
+    const target1 = nearSupport;
+    const target2 = support[1] || currentPrice * 0.97;
+    const target3 = support[2] || currentPrice * 0.95;
+
+    // Вероятность цели 1 = базовая уверенность
+    let target1Prob = overallConfidence;
+    
+    // Корректировки на основе факторов
+    if (liquidityData?.hasValidSetup) target1Prob += 10;
+    if (triangleData?.hasBreakout && triangleData?.hasRetest) target1Prob += 15;
+    if (session === 'OVERLAP') target1Prob += 5;
+    
+    targets.push({
+      price: target1,
+      probability: Math.min(95, target1Prob),
+      reasoning: 'Первая поддержка - высокая вероятность достижения'
+    });
+
+    // Вероятность цели 2 = 70% от цели 1
+    let target2Prob = target1Prob * 0.7;
+    if (structure.type === 'LL') target2Prob += 5;
+    
+    targets.push({
+      price: target2,
+      probability: Math.min(85, target2Prob),
+      reasoning: 'Вторая поддержка - средняя вероятность'
+    });
+
+    // Вероятность цели 3 = 50% от цели 1
+    let target3Prob = target1Prob * 0.5;
+    
+    targets.push({
+      price: target3,
+      probability: Math.min(70, target3Prob),
+      reasoning: 'Третья поддержка - требует сильного импульса'
+    });
   }
 
-  // Прогноз движения и 3 точки входа
+  // === PREDICTION ===
   let direction: 'UP' | 'DOWN' | 'SIDEWAYS';
   let targetPrice: number;
   let reversalPoint: number;
   let reason: string;
-  let entryPoints: EntryPoint[] = [];
 
   if (signal === 'BUY') {
     direction = 'UP';
-    targetPrice = resistance[0] || currentPrice * 1.02;
-    reversalPoint = resistance[0] ? resistance[0] * 1.005 : currentPrice * 1.025;
+    targetPrice = targets.length > 0 ? targets[0].price : nearResistance;
+    reversalPoint = targets.length > 0 ? targets[targets.length - 1].price : nearResistance * 1.02;
     
-    // 3 точки входа для ПОКУПКИ
-    const nearSupport = support[0] || currentPrice * 0.99;
-    const midSupport = support[1] || currentPrice * 0.985;
-    const farSupport = support[2] || currentPrice * 0.97;
+    const reasons: string[] = [];
+    if (liquidityData?.hasValidSetup) reasons.push('Liquidity Engine подтверждает');
+    if (triangleData?.hasBreakout && triangleData?.hasRetest) reasons.push('Треугольник: пробой + ретест (85%)');
+    if (structure.breakOfStructure === 'UP') reasons.push('Break of Structure вверх');
+    if (session === 'OVERLAP') reasons.push('OVERLAP - лучшее время');
     
-    entryPoints = [
-      {
-        type: 'Агрессивный',
-        entryPrice: currentPrice,
-        probability: probability,
-        stopLoss: nearSupport * 0.995,
-        takeProfit: resistance[0] || currentPrice * 1.02,
-        riskReward: ((resistance[0] || currentPrice * 1.02) - currentPrice) / (currentPrice - nearSupport * 0.995),
-        description: 'Вход по текущей цене - максимальный потенциал, но выше риск'
-      },
-      {
-        type: 'Умеренный',
-        entryPrice: nearSupport,
-        probability: Math.min(100, probability + 10),
-        stopLoss: midSupport * 0.995,
-        takeProfit: resistance[0] || currentPrice * 1.02,
-        riskReward: ((resistance[0] || currentPrice * 1.02) - nearSupport) / (nearSupport - midSupport * 0.995),
-        description: 'Вход от первой поддержки - баланс риска и прибыли'
-      },
-      {
-        type: 'Консервативный',
-        entryPrice: midSupport,
-        probability: Math.min(100, probability + 20),
-        stopLoss: farSupport * 0.995,
-        takeProfit: resistance[0] || currentPrice * 1.02,
-        riskReward: ((resistance[0] || currentPrice * 1.02) - midSupport) / (midSupport - farSupport * 0.995),
-        description: 'Вход от второй поддержки - минимальный риск, высокая вероятность'
-      }
-    ];
-    
-    if (indicators.rsi < 30 && liquiditySweep.isSweep) {
-      reason = 'RSI перепродан + сбор стопов - сильный отскок';
-    } else if (cvdGrowing && structure.breakOfStructure === 'UP') {
-      reason = 'CVD растет + пробой структуры - продолжение роста';
-    } else if (analysis.trend === 'bullish' && htfTrend === 'bullish') {
-      reason = 'Совпадение трендов на всех таймфреймах';
-    } else {
-      reason = 'Технические индикаторы указывают на рост';
-    }
-  } else if (signal === 'SELL') {
-    direction = 'DOWN';
-    targetPrice = support[0] || currentPrice * 0.98;
-    reversalPoint = support[0] ? support[0] * 0.995 : currentPrice * 0.975;
-    
-    // 3 точки входа для ПРОДАЖИ
-    const nearResistance = resistance[0] || currentPrice * 1.01;
-    const midResistance = resistance[1] || currentPrice * 1.015;
-    const farResistance = resistance[2] || currentPrice * 1.03;
-    
-    entryPoints = [
-      {
-        type: 'Агрессивный',
-        entryPrice: currentPrice,
-        probability: probability,
-        stopLoss: nearResistance * 1.005,
-        takeProfit: support[0] || currentPrice * 0.98,
-        riskReward: (currentPrice - (support[0] || currentPrice * 0.98)) / (nearResistance * 1.005 - currentPrice),
-        description: 'Вход по текущей цене - максимальный потенциал, но выше риск'
-      },
-      {
-        type: 'Умеренный',
-        entryPrice: nearResistance,
-        probability: Math.min(100, probability + 10),
-        stopLoss: midResistance * 1.005,
-        takeProfit: support[0] || currentPrice * 0.98,
-        riskReward: (nearResistance - (support[0] || currentPrice * 0.98)) / (midResistance * 1.005 - nearResistance),
-        description: 'Вход от первого сопротивления - баланс риска и прибыли'
-      },
-      {
-        type: 'Консервативный',
-        entryPrice: midResistance,
-        probability: Math.min(100, probability + 20),
-        stopLoss: farResistance * 1.005,
-        takeProfit: support[0] || currentPrice * 0.98,
-        riskReward: (midResistance - (support[0] || currentPrice * 0.98)) / (farResistance * 1.005 - midResistance),
-        description: 'Вход от второго сопротивления - минимальный риск, высокая вероятность'
-      }
-    ];
-    
-    if (indicators.rsi > 70 && liquiditySweep.isSweep) {
-      reason = 'RSI перекуплен + сбор стопов - сильная коррекция';
-    } else if (!cvdGrowing && priceGrowing) {
-      reason = 'CVD падает при росте цены - маркет-мейкер разгружает';
-    } else if (analysis.trend === 'bearish' && htfTrend === 'bearish') {
-      reason = 'Нисходящий тренд на всех таймфреймах';
-    } else {
-      reason = 'Технические индикаторы указывают на снижение';
-    }
+    reason = reasons.length > 0 ? reasons.join(', ') : 'Технические индикаторы указывают на рост';
   } else {
     direction = 'SIDEWAYS';
     targetPrice = currentPrice;
     reversalPoint = currentPrice;
-    reason = 'Неопределенная ситуация - лучше ждать четкого сигнала';
-    
-    // Для HOLD не даем точки входа
-    entryPoints = [];
+    reason = 'Недостаточно подтверждений для входа';
   }
 
   return {
     signal,
-    probability,
-    factors: factors.slice(0, 8),
+    overallConfidence,
+    probability: overallConfidence, // Алиас для обратной совместимости
+    factors: factors.slice(0, 10),
     entryPoints,
+    targets,
     prediction: {
       direction,
       targetPrice,
       reversalPoint,
       timeframe: '1-4 часа',
       reason
+    },
+    breakdown: {
+      technical: technicalScore,
+      liquidity: liquidityScore,
+      structure: structureScore,
+      session: sessionScore,
+      triangle: triangleScore
     }
   };
 }
 
 export function formatProbabilityReport(
   score: ProbabilityScore,
-  currentPrice: number,
-  support: number[],
-  resistance: number[]
+  currentPrice: number
 ): string {
-  let report = `**Сигнал:** ${score.signal}\n`;
-  report += `**Общая вероятность:** ${score.probability}%\n\n`;
+  let report = `**Общая уверенность:** ${score.overallConfidence.toFixed(1)}%\n\n`;
   
-  // 3 точки входа
+  // Breakdown
+  report += `**Breakdown:**\n`;
+  report += `• Технический анализ: ${score.breakdown.technical}/30\n`;
+  report += `• Ликвидность: ${score.breakdown.liquidity}/25\n`;
+  report += `• Структура: ${score.breakdown.structure}/20\n`;
+  report += `• Сессия: ${score.breakdown.session}/10\n`;
+  report += `• Треугольник: ${score.breakdown.triangle}/15\n\n`;
+  
+  // Точки входа
   if (score.entryPoints.length > 0) {
     report += `**📍 ТОЧКИ ВХОДА:**\n\n`;
     
-    score.entryPoints.forEach((entry, idx) => {
+    score.entryPoints.forEach((entry) => {
       const emoji = entry.type === 'Агрессивный' ? '🔥' : entry.type === 'Умеренный' ? '⚖️' : '🛡️';
-      report += `${emoji} **${entry.type}** (${entry.probability}%)\n`;
-      report += `• Вход: $${entry.entryPrice.toFixed(2)}\n`;
-      report += `• Стоп: $${entry.stopLoss.toFixed(2)}\n`;
-      report += `• Цель: $${entry.takeProfit.toFixed(2)}\n`;
+      report += `${emoji} **${entry.type}** (уверенность ${entry.confidence.toFixed(0)}%)\n`;
+      report += `• Вход: ${entry.entryPrice.toFixed(2)}\n`;
+      report += `• Стоп: ${entry.stopLoss.toFixed(2)}\n`;
+      report += `• Цель: ${entry.takeProfit.toFixed(2)}\n`;
       report += `• Risk/Reward: 1:${entry.riskReward.toFixed(2)}\n`;
       report += `• ${entry.description}\n\n`;
     });
   }
   
-  report += `**ПРОГНОЗ:**\n`;
-  report += `• Направление: ${score.prediction.direction === 'UP' ? '📈 ВВЕРХ' : score.prediction.direction === 'DOWN' ? '📉 ВНИЗ' : '↔️ БОКОВИК'}\n`;
-  report += `• Цель движения: ${score.prediction.targetPrice.toFixed(2)}\n`;
-  report += `• Разворот ожидается: ${score.prediction.reversalPoint.toFixed(2)}\n`;
-  report += `• Таймфрейм: ${score.prediction.timeframe}\n\n`;
+  // Цели с вероятностями
+  if (score.targets.length > 0) {
+    report += `**🎯 ЦЕЛИ:**\n\n`;
+    score.targets.forEach((target, idx) => {
+      report += `**Цель ${idx + 1}:** ${target.price.toFixed(2)} (${target.probability.toFixed(0)}% вероятность)\n`;
+      report += `• ${target.reasoning}\n\n`;
+    });
+  }
   
+  // Факторы
   report += `**Факторы:**\n`;
   score.factors.forEach(factor => {
     report += `• ${factor}\n`;

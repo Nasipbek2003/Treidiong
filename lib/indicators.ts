@@ -204,3 +204,42 @@ export function getHigherTimeframeTrend(
   if (currentPrice < sma20 && sma20 < sma50) return 'bearish';
   return 'sideways';
 }
+
+// Блок 11: ATR (Average True Range) - для адаптивных стопов
+export function calculateATR(data: PriceData[], period: number = 14): number {
+  if (data.length < period + 1) return 0;
+  
+  const trueRanges: number[] = [];
+  
+  for (let i = 1; i < data.length; i++) {
+    const high = data[i].high;
+    const low = data[i].low;
+    const prevClose = data[i - 1].close;
+    
+    const tr = Math.max(
+      high - low,
+      Math.abs(high - prevClose),
+      Math.abs(low - prevClose)
+    );
+    
+    trueRanges.push(tr);
+  }
+  
+  // Берем последние N значений
+  const recentTR = trueRanges.slice(-period);
+  return recentTR.reduce((sum, tr) => sum + tr, 0) / period;
+}
+
+// Рассчитывает адаптивный стоп на основе ATR
+export function calculateAdaptiveStop(
+  entryPrice: number,
+  direction: 'BUY' | 'SELL',
+  atr: number,
+  multiplier: number = 1.5
+): number {
+  if (direction === 'BUY') {
+    return entryPrice - (atr * multiplier);
+  } else {
+    return entryPrice + (atr * multiplier);
+  }
+}

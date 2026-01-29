@@ -24,11 +24,13 @@ export class SignalScorer {
 
   constructor(weights?: Partial<ScoreWeights>) {
     this.weights = {
-      sweep: weights?.sweep ?? 25,
-      bos: weights?.bos ?? 30,
+      sweep: weights?.sweep ?? 20,
+      bos: weights?.bos ?? 25,
       divergence: weights?.divergence ?? 15,
       volume: weights?.volume ?? 10,
-      htf: weights?.htf ?? 20,
+      htf: weights?.htf ?? 10,
+      triangle: weights?.triangle ?? 15,
+      session: weights?.session ?? 5,
     };
   }
 
@@ -41,7 +43,9 @@ export class SignalScorer {
     candle: Candlestick,
     volumeData: number[],
     rsiData: number[],
-    htfPools: LiquidityPool[]
+    htfPools: LiquidityPool[],
+    triangleData?: { isValid: boolean; hasBreakout: boolean; hasRetest: boolean; compressionRatio: number } | null,
+    session?: 'ASIAN' | 'LONDON' | 'NEW_YORK' | 'OVERLAP'
   ): SignalScore {
     const breakdown: SignalScoreBreakdown = {
       sweepScore: 0,
@@ -49,17 +53,19 @@ export class SignalScorer {
       divergenceScore: 0,
       volumeScore: 0,
       htfScore: 0,
+      triangleScore: 0,
+      sessionScore: 0,
     };
 
     const components: string[] = [];
 
-    // 1. Liquidity Sweep Score (0-25)
+    // 1. Liquidity Sweep Score (0-20)
     if (sweep) {
       breakdown.sweepScore = this.scoreSweep(sweep);
       components.push(`Liquidity Sweep (${breakdown.sweepScore.toFixed(1)})`);
     }
 
-    // 2. Break of Structure Score (0-30)
+    // 2. Break of Structure Score (0-25)
     if (structureChange) {
       breakdown.bosScore = this.scoreBOS(structureChange);
       components.push(`${structureChange.type} (${breakdown.bosScore.toFixed(1)})`);
@@ -81,11 +87,27 @@ export class SignalScorer {
       }
     }
 
-    // 5. HTF Level Score (0-20)
+    // 5. HTF Level Score (0-10)
     if (htfPools.length > 0) {
       breakdown.htfScore = this.scoreHTFLevel(candle, htfPools);
       if (breakdown.htfScore > 0) {
         components.push(`HTF Level (${breakdown.htfScore.toFixed(1)})`);
+      }
+    }
+
+    // 6. Triangle Score (0-15)
+    if (triangleData) {
+      breakdown.triangleScore = this.scoreTriangle(triangleData);
+      if (breakdown.triangleScore > 0) {
+        components.push(`Triangle Pattern (${breakdown.triangleScore.toFixed(1)})`);
+      }
+    }
+
+    // 7. Session Score (0-5)
+    if (session) {
+      breakdown.sessionScore = this.scoreSession(session);
+      if (breakdown.sessionScore > 0) {
+        components.push(`${session} Session (${breakdown.sessionScore.toFixed(1)})`);
       }
     }
 
@@ -95,7 +117,9 @@ export class SignalScorer {
       breakdown.bosScore +
       breakdown.divergenceScore +
       breakdown.volumeScore +
-      breakdown.htfScore;
+      breakdown.htfScore +
+      (breakdown.triangleScore || 0) +
+      (breakdown.sessionScore || 0);
 
     return {
       totalScore: Math.min(totalScore, 100),
@@ -219,6 +243,51 @@ export class SignalScorer {
     const proximity = 1 - minDistance / 0.01;
 
     return this.weights.htf * proximity;
+  }
+
+  /**
+   * Оценивает качество треугольника
+   */
+  private scoreTriangle(triangleData: { 
+    isValid: boolean; 
+    hasBreakout: boolean; 
+    hasRetest: boolean; 
+    compressionRatio: number 
+  }): number {
+    if (!triangleData.isValid) {
+      return 0;
+    }
+
+    let score = 0;
+
+    // Качество треугольника (сжатие)
+    if (triangleData.compressionRatio < 0.7) {
+      score += (this.weights.triangle || 15) * 0.5; // 50% за хорошее сжатие
+    }
+
+    // Тип сигнала
+    if (triangleData.hasBreakout && triangleData.hasRetest) {
+      score += (this.weights.triangle || 15) * 0.5; // 50% за пробой + ретест (лучший вход)
+    } else if (triangleData.hasBreakout) {
+      score += (this.weights.triangle || 15) * 0.3; // 30% за только пробой
+    }
+
+    return score;
+  }
+
+  /**
+   * Оценивает торговую сессию
+   */
+  private scoreSession(session: 'ASIAN' | 'LONDON' | 'NEW_YORK' | 'OVERLAP'): number {
+    switch (session) {
+      case 'OVERLAP':
+        return this.weights.session || 5; // Максимум за лучшее время
+      case 'LONDON':
+      case 'NEW_YORK':
+        return (this.weights.session || 5) * 0.7; // 70%
+      case 'ASIAN':
+        return (this.weights.session || 5) * 0.3; // 30% - худшее время
+    }
   }
 
   /**

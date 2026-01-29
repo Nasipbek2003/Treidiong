@@ -20,8 +20,46 @@ The system consists of the following components:
 3. **BreakoutValidator** - Filters false breakouts using volume, RSI, and price action
 4. **StructureAnalyzer** - Identifies market structure changes (CHOCH/BOS)
 5. **SignalScorer** - Evaluates signal strength (0-100 score)
-6. **LiquidityStore** - Manages state and persistence
-7. **LiquidityAPI** - REST API for integration
+6. **TriangleDetector** - Detects triangle patterns and generates entry signals (NEW)
+7. **LiquidityStore** - Manages state and persistence
+8. **LiquidityAPI** - REST API for integration
+
+## New Feature: Triangle Pattern Detection
+
+The system now includes advanced triangle pattern detection with strict entry rules:
+
+### Key Features:
+- ✅ Automatic triangle detection (converging trendlines)
+- ✅ Two trading methods: Breakout+Retest (85% confidence) and False Breakout (75% confidence)
+- ✅ Strict validation: 3 mandatory checks before entry
+- ✅ Risk management: Auto-calculated stop loss and take profit
+- ✅ Integration with existing liquidity analysis
+
+### Quick Start:
+
+```typescript
+import { TriangleDetector } from './triangle-detector';
+
+const detector = new TriangleDetector();
+const triangles = detector.detectTriangles(candles);
+
+// Check for breakout + retest
+const breakout = detector.detectBreakout(candles, triangle, currentIndex);
+const retest = detector.detectRetest(candles, triangle, breakout, currentIndex);
+
+// Generate signal
+const signal = detector.generateSignal(candles, triangle, 'breakout-retest', breakout, retest);
+
+// Validate
+const validation = detector.validateSignal(candles, signal, currentIndex);
+```
+
+### Documentation:
+- **Full Guide**: `TRIANGLE_TRADING.md` - Complete trading rules for AI
+- **Quick Start**: `TRIANGLE_QUICKSTART.md` - Get started in 5 minutes
+- **Integration**: `TRIANGLE_INTEGRATION.md` - How to integrate into existing system
+- **Examples**: `triangle-example.ts` - Code examples
+- **Tests**: `../scripts/test-triangle-detector.js` - Test suite
 
 ## Installation
 

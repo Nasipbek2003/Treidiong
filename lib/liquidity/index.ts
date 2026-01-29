@@ -19,6 +19,18 @@ export { SignalScorer } from './signal-scorer';
 export { Visualization } from './visualization';
 export { LiquidityStore } from './store';
 export { LiquidityEngine } from './engine';
+export { TriangleDetector } from './triangle-detector';
+
+// Export triangle types
+export type {
+  Triangle,
+  TriangleLine,
+  TriangleBreakout,
+  TriangleRetest,
+  FalseBreakout,
+  TriangleSignal,
+  TriangleSignalType,
+} from './triangle-detector';
 
 // Export visualization types
 export type {

@@ -120,6 +120,26 @@ export class LiquidityEngine {
     const blockingReasons: string[] = [];
     const latestCandle = candles[candles.length - 1];
 
+    // Проверка 0: Фильтр по торговой сессии
+    const now = new Date();
+    const utcHour = now.getUTCHours();
+    let session: 'ASIAN' | 'LONDON' | 'NEW_YORK' | 'OVERLAP' = 'ASIAN';
+    let minScoreForSession = 50;
+    
+    if (utcHour >= 13 && utcHour < 16) {
+      session = 'OVERLAP';
+      minScoreForSession = 45; // Ниже порог
+    } else if (utcHour >= 7 && utcHour < 16) {
+      session = 'LONDON';
+      minScoreForSession = 50;
+    } else if (utcHour >= 13 && utcHour < 22) {
+      session = 'NEW_YORK';
+      minScoreForSession = 50;
+    } else {
+      session = 'ASIAN';
+      minScoreForSession = 65; // Выше порог для азиатской сессии
+    }
+
     // Получаем последние события
     const recentSweeps = this.store.getState().sweeps.slice(-5);
     const recentStructures = this.store.getState().structures.slice(-5);
@@ -170,10 +190,26 @@ export class LiquidityEngine {
       }
     }
 
-    // Проверка 5: Расчёт score
+    // Проверка 5: Расчёт score с треугольниками и сессией
     const htfPools = this.store.getState().pools.filter(p =>
       ['pdh', 'pdl'].includes(p.type)
     );
+
+    // Проверяем треугольники
+    let triangleData: { isValid: boolean; hasBreakout: boolean; hasRetest: boolean; compressionRatio: number } | null = null;
+    const trianglePools = this.store.getState().pools.filter(p => 
+      p.type === 'triangle_upper' || p.type === 'triangle_lower'
+    );
+    
+    if (trianglePools.length >= 2) {
+      // Есть треугольник
+      triangleData = {
+        isValid: true,
+        hasBreakout: false,
+        hasRetest: false,
+        compressionRatio: 0.7 // Будет обновлено при интеграции triangle detector
+      };
+    }
 
     const score = this.signalScorer.calculateScore(
       latestSweep,
@@ -181,12 +217,16 @@ export class LiquidityEngine {
       latestCandle,
       volumeData,
       rsiData || [],
-      htfPools
+      htfPools,
+      triangleData,
+      session
     );
 
-    // Минимальный score для сигнала
-    if (score.totalScore < 50) {
-      blockingReasons.push(`Score слишком низкий: ${score.totalScore.toFixed(1)}/100`);
+    // Проверка 6: Score с учетом сессии
+    if (score.totalScore < minScoreForSession) {
+      blockingReasons.push(
+        `Score слишком низкий для ${session} сессии: ${score.totalScore.toFixed(1)}/${minScoreForSession} (требуется >= ${minScoreForSession})`
+      );
       return { signal: null, hasValidSetup: false, blockingReasons };
     }
 
@@ -219,18 +259,21 @@ export class LiquidityEngine {
   ): TradingSignal {
     const entryPrice = candle.close;
 
-    // Расчёт stop loss и take profit
+    // Рассчитываем ATR для адаптивных стопов
+    const atr = this.calculateATR(this.store.getState().candles);
+    
+    // Расчёт stop loss и take profit с использованием ATR
     let stopLoss: number;
     let takeProfit: number;
 
     if (direction === 'BUY') {
-      // Stop loss ниже sweep low
-      stopLoss = sweep.sweepPrice - (entryPrice - sweep.sweepPrice) * 0.5;
+      // Stop loss на основе ATR (1.5x ATR)
+      stopLoss = entryPrice - (atr * 1.5);
       // Take profit с R:R 2:1
       takeProfit = entryPrice + (entryPrice - stopLoss) * 2;
     } else {
-      // Stop loss выше sweep high
-      stopLoss = sweep.sweepPrice + (sweep.sweepPrice - entryPrice) * 0.5;
+      // Stop loss на основе ATR (1.5x ATR)
+      stopLoss = entryPrice + (atr * 1.5);
       // Take profit с R:R 2:1
       takeProfit = entryPrice - (stopLoss - entryPrice) * 2;
     }
@@ -250,6 +293,36 @@ export class LiquidityEngine {
       takeProfit,
       reasoning,
     };
+  }
+
+  /**
+   * Рассчитывает ATR (Average True Range)
+   */
+  private calculateATR(candles: Candlestick[], period: number = 14): number {
+    if (candles.length < period + 1) {
+      // Fallback: используем средний размер свечей
+      const avgRange = candles.slice(-20).reduce((sum, c) => sum + (c.high - c.low), 0) / Math.min(20, candles.length);
+      return avgRange;
+    }
+    
+    const trueRanges: number[] = [];
+    
+    for (let i = 1; i < candles.length; i++) {
+      const high = candles[i].high;
+      const low = candles[i].low;
+      const prevClose = candles[i - 1].close;
+      
+      const tr = Math.max(
+        high - low,
+        Math.abs(high - prevClose),
+        Math.abs(low - prevClose)
+      );
+      
+      trueRanges.push(tr);
+    }
+    
+    const recentTR = trueRanges.slice(-period);
+    return recentTR.reduce((sum, tr) => sum + tr, 0) / period;
   }
 
   /**

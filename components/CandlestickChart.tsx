@@ -11,9 +11,10 @@ interface Props {
   sma50?: number[];
   trendLines?: TrendLine[];
   showLines?: boolean;
+  symbol?: string; // Добавляем символ для определения precision
 }
 
-export default function CandlestickChart({ data, sma20, sma50, trendLines, showLines = false }: Props) {
+export default function CandlestickChart({ data, sma20, sma50, trendLines, showLines = false, symbol }: Props) {
   const chartContainerRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<IChartApi | null>(null);
   const candlestickSeriesRef = useRef<ISeriesApi<'Candlestick'> | null>(null);
@@ -21,6 +22,23 @@ export default function CandlestickChart({ data, sma20, sma50, trendLines, showL
   const sma50SeriesRef = useRef<ISeriesApi<'Line'> | null>(null);
   const isFirstLoadRef = useRef(true);
   const prevDataLengthRef = useRef(0);
+
+  // Определяем precision в зависимости от актива
+  const getPrecision = () => {
+    if (!symbol) return 2;
+    
+    // Валютные пары (форекс) - 5 знаков
+    const forexPairs = ['EUR/USD', 'GBP/USD', 'USD/JPY', 'USD/CHF', 'AUD/USD', 'USD/CAD', 'NZD/USD'];
+    if (forexPairs.some(pair => symbol.includes(pair.replace('/', '')))) {
+      return 5;
+    }
+    
+    // Золото, серебро, индексы - 2 знака
+    return 2;
+  };
+
+  const precision = getPrecision();
+  const minMove = precision === 5 ? 0.00001 : 0.01;
 
   // Создаем график только один раз при монтировании
   useEffect(() => {
@@ -57,6 +75,15 @@ export default function CandlestickChart({ data, sma20, sma50, trendLines, showL
       },
       rightPriceScale: {
         borderColor: '#2a2e39',
+        // Кастомный форматтер для отображения всех знаков после запятой
+        mode: 0, // Normal price scale mode
+        autoScale: true,
+        invertScale: false,
+        alignLabels: true,
+        scaleMargins: {
+          top: 0.1,
+          bottom: 0.1,
+        },
       },
       crosshair: {
         mode: 1,
@@ -84,6 +111,11 @@ export default function CandlestickChart({ data, sma20, sma50, trendLines, showL
       borderDownColor: '#ef5350',
       wickUpColor: '#26a69a',
       wickDownColor: '#ef5350',
+      priceFormat: {
+        type: 'price',
+        precision: precision, // Динамическая точность
+        minMove: minMove, // Минимальное движение цены
+      },
     });
 
     sma20SeriesRef.current = chart.addLineSeries({

@@ -20,21 +20,34 @@ import { analyzeChart, TrendLine, findSupportLevels, findResistanceLevels } from
 const CandlestickChart = dynamic(() => import('@/components/CandlestickChart'), { ssr: false });
 
 export default function Home() {
+  // Инициализация из localStorage
+  const [asset, setAsset] = useState(() => {
+    if (typeof window !== 'undefined') {
+      return localStorage.getItem('selectedAsset') || 'GOLD';
+    }
+    return 'GOLD';
+  });
+  
+  const [timeframe, setTimeframe] = useState(() => {
+    if (typeof window !== 'undefined') {
+      return localStorage.getItem('selectedTimeframe') || '15min';
+    }
+    return '15min';
+  });
+  
   const [priceData, setPriceData] = useState<PriceData[]>([]);
   const [indicators, setIndicators] = useState<TechnicalIndicators | null>(null);
   const [analysis, setAnalysis] = useState<MarketAnalysis | null>(null);
   const [loading, setLoading] = useState(true);
-  const [asset, setAsset] = useState('GOLD');
   const [error, setError] = useState<string | null>(null);
-  const [timeframe, setTimeframe] = useState('15min');
   const [autoRefresh, setAutoRefresh] = useState(true);
   const [lastUpdate, setLastUpdate] = useState<Date>(new Date());
   const [showTrendLines, setShowTrendLines] = useState(false);
   const [levelsStrength, setLevelsStrength] = useState<'weak' | 'medium' | 'strong' | null>(null);
   const [showLevelsMenu, setShowLevelsMenu] = useState(false);
   const [trendLines, setTrendLines] = useState<TrendLine[]>([]);
-  const [showSMA20, setShowSMA20] = useState(true);
-  const [showSMA50, setShowSMA50] = useState(true);
+  const [showSMA20, setShowSMA20] = useState(false);
+  const [showSMA50, setShowSMA50] = useState(false);
   const [showIndicatorsMenu, setShowIndicatorsMenu] = useState(false);
   const [menuPosition, setMenuPosition] = useState({ top: 0, right: 0 });
   const [activePanel, setActivePanel] = useState<'market' | 'indicators' | 'risk' | null>(null);
@@ -45,6 +58,19 @@ export default function Home() {
   const indicatorsMenuRef = useRef<HTMLDivElement>(null);
   const indicatorsButtonRef = useRef<HTMLButtonElement>(null);
   const levelsButtonRef = useRef<HTMLButtonElement>(null);
+
+  // Сохранение выбора в localStorage
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('selectedAsset', asset);
+    }
+  }, [asset]);
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('selectedTimeframe', timeframe);
+    }
+  }, [timeframe]);
 
   // Закрываем меню при клике вне его
   useEffect(() => {
@@ -837,6 +863,7 @@ export default function Home() {
                 sma50={showSMA50 ? sma50Array : undefined} 
                 trendLines={trendLines}
                 showLines={showTrendLines}
+                symbol={asset}
               />
             </div>
           </div>

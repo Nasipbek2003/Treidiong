@@ -21,11 +21,13 @@ export const DEFAULT_CONFIG: Readonly<LiquidityConfig> = Object.freeze({
 
   // Score weights for signal evaluation
   scoreWeights: Object.freeze({
-    sweep: 25,
-    bos: 30,
+    sweep: 20,
+    bos: 25,
     divergence: 15,
     volume: 10,
-    htf: 20,
+    htf: 10,
+    triangle: 15,
+    session: 5,
   }),
 
   // Higher timeframes for HTF analysis

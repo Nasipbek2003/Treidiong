@@ -37,7 +37,9 @@ export type LiquidityPoolType =
   | 'range_high'
   | 'range_low'
   | 'trendline_high'
-  | 'trendline_low';
+  | 'trendline_low'
+  | 'triangle_upper'
+  | 'triangle_lower';
 
 /**
  * Status of a liquidity pool
@@ -139,6 +141,10 @@ export interface SignalScoreBreakdown {
   volumeScore: number;
   /** Score from higher timeframe level (0-20) */
   htfScore: number;
+  /** Score from triangle pattern (0-15) */
+  triangleScore?: number;
+  /** Score from trading session (0-5) */
+  sessionScore?: number;
 }
 
 /**
@@ -200,6 +206,10 @@ export interface ScoreWeights {
   volume: number;
   /** Weight for HTF component (default: 20) */
   htf: number;
+  /** Weight for triangle component (default: 15) */
+  triangle?: number;
+  /** Weight for session component (default: 5) */
+  session?: number;
 }
 
 /**
