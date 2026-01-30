@@ -6,7 +6,15 @@ import {
   calculateVolumeSMA,
   calculateCVD,
   detectLiquiditySweep,
-  analyzeMarketStructure
+  analyzeMarketStructure,
+  calculateEMA,
+  calculateATR,
+  calculateADX,
+  calculateStochasticRSI,
+  calculateSuperTrend,
+  calculateIchimoku,
+  calculateOBV,
+  analyzeOBVDivergence
 } from './indicators';
 
 export function analyzeTrend(prices: number[]): 'bullish' | 'bearish' | 'sideways' {
@@ -43,19 +51,52 @@ function findPeaks(data: number[]): number[] {
 export function generateSignal(indicators: TechnicalIndicators, trend: string): { signal: 'buy' | 'sell' | 'hold'; confidence: number } {
   let score = 0;
   
+  // RSI
   if (indicators.rsi < 30) score += 2;
   else if (indicators.rsi > 70) score -= 2;
   
+  // MACD
   if (indicators.macd.histogram > 0) score += 1;
   else score -= 1;
   
+  // Trend
   if (trend === 'bullish') score += 2;
   else if (trend === 'bearish') score -= 2;
   
-  const confidence = Math.min(Math.abs(score) * 15, 100);
+  // ADX - сила тренда
+  if (indicators.adx && indicators.adx.adx > 25) {
+    if (indicators.adx.plusDI > indicators.adx.minusDI) score += 1;
+    else score -= 1;
+  }
   
-  if (score >= 3) return { signal: 'buy', confidence };
-  if (score <= -3) return { signal: 'sell', confidence };
+  // Stochastic RSI
+  if (indicators.stochasticRSI) {
+    if (indicators.stochasticRSI.k < 20) score += 1;
+    else if (indicators.stochasticRSI.k > 80) score -= 1;
+  }
+  
+  // SuperTrend
+  if (indicators.superTrend) {
+    if (indicators.superTrend.direction === 'BUY') score += 2;
+    else score -= 2;
+  }
+  
+  // Ichimoku
+  if (indicators.ichimoku) {
+    if (indicators.ichimoku.signal === 'bullish') score += 1;
+    else if (indicators.ichimoku.signal === 'bearish') score -= 1;
+  }
+  
+  // OBV Divergence
+  if (indicators.obvDivergence?.hasDivergence) {
+    if (indicators.obvDivergence.type === 'bullish') score += 1;
+    else if (indicators.obvDivergence.type === 'bearish') score -= 1;
+  }
+  
+  const confidence = Math.min(Math.abs(score) * 10, 100);
+  
+  if (score >= 4) return { signal: 'buy', confidence };
+  if (score <= -4) return { signal: 'sell', confidence };
   return { signal: 'hold', confidence };
 }
 

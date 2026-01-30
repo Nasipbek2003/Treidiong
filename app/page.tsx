@@ -11,7 +11,22 @@ import CorrelationMatrix from '@/components/CorrelationMatrix';
 import EconomicData from '@/components/EconomicData';
 import AIChat from '@/components/AIChat';
 import { PriceData, TechnicalIndicators, MarketAnalysis } from '@/types';
-import { calculateSMA, calculateRSI, calculateMACD, calculateBollingerBands } from '@/lib/indicators';
+import { 
+  calculateSMA, 
+  calculateRSI, 
+  calculateMACD, 
+  calculateBollingerBands,
+  calculateEMA,
+  calculateATR,
+  calculateADX,
+  calculateStochasticRSI,
+  calculateSuperTrend,
+  calculateIchimoku,
+  calculateOBV,
+  analyzeOBVDivergence,
+  calculateVolumeSMA,
+  calculateCVD
+} from '@/lib/indicators';
 import { performFullAnalysis } from '@/lib/analysis';
 import { fetchIntraday, fetchLatestPrice, assetSymbols, clearCache, isMarketOpen } from '@/lib/api';
 import { formatPrice } from '@/lib/formatPrice';
@@ -234,12 +249,29 @@ export default function Home() {
       
       const prices = data.map(d => d.close);
       const calculatedIndicators: TechnicalIndicators = {
+        // Основные индикаторы (видимые)
         rsi: calculateRSI(prices),
         macd: calculateMACD(prices),
         sma20: calculateSMA(prices, 20),
         sma50: calculateSMA(prices, 50),
         sma200: calculateSMA(prices, 200),
-        bollingerBands: calculateBollingerBands(prices)
+        ema12: calculateEMA(prices, 12),
+        ema26: calculateEMA(prices, 26),
+        ema50: calculateEMA(prices, 50),
+        bollingerBands: calculateBollingerBands(prices),
+        
+        // Дополнительные индикаторы (для AI анализа)
+        atr: calculateATR(data, 14),
+        adx: calculateADX(data, 14),
+        stochasticRSI: calculateStochasticRSI(prices, 14, 3, 3),
+        superTrend: calculateSuperTrend(data, 10, 3),
+        ichimoku: calculateIchimoku(data),
+        obv: calculateOBV(data),
+        obvDivergence: analyzeOBVDivergence(data),
+        
+        // Volume индикаторы
+        volumeSMA: calculateVolumeSMA(data.map(d => d.volume), 20),
+        cvd: calculateCVD(data)
       };
       setIndicators(calculatedIndicators);
       
@@ -778,7 +810,13 @@ export default function Home() {
               )}
             </div>
             <div className="side-panel-content">
-              <MarketAnalysisCard analysis={analysis} currentPrice={currentPrice} asset={asset} />
+              <MarketAnalysisCard 
+                analysis={analysis} 
+                currentPrice={currentPrice} 
+                asset={asset}
+                priceData={priceData}
+                indicators={indicators}
+              />
             </div>
           </div>
         )}
@@ -792,7 +830,7 @@ export default function Home() {
               )}
             </div>
             <div className="side-panel-content">
-              <TechnicalIndicatorsCard indicators={indicators} />
+              <TechnicalIndicatorsCard indicators={indicators} asset={asset} />
               <LiquidityIndicators 
                 symbol={asset}
                 candles={priceData}

@@ -7,7 +7,7 @@ const anthropic = new Anthropic({
 
 export async function POST(request: NextRequest) {
   try {
-    const { imageBase64, action, message, context, version = 'market-analysis' } = await request.json();
+    const { imageBase64, action, message, context, version = 'signal-generator' } = await request.json();
 
     console.log('\n=== VISUAL ANALYSIS REQUEST ===');
     console.log('Asset:', context.asset);

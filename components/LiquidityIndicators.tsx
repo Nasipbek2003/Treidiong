@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { VisualizationData } from '@/lib/liquidity';
+import { formatPrice } from '@/lib/formatPrice';
 
 interface Props {
   symbol: string;
@@ -12,6 +13,11 @@ interface Props {
 export default function LiquidityIndicators({ symbol, candles, currentPrice }: Props) {
   const [vizData, setVizData] = useState<VisualizationData | null>(null);
   const [loading, setLoading] = useState(false);
+  
+  // Функция для форматирования цены с правильным количеством знаков
+  const formatValue = (value: number) => {
+    return formatPrice(value, symbol);
+  };
 
   useEffect(() => {
     if (!candles || candles.length === 0) return;
@@ -90,7 +96,7 @@ export default function LiquidityIndicators({ symbol, candles, currentPrice }: P
                 {pool.type === 'range_low' && 'Range Low'}
               </span>
               <span className="metric-value">
-                ${pool.price.toFixed(2)}
+                {formatValue(pool.price)}
                 <span className="text-xs text-gray-400 ml-2">
                   ({pool.distancePercent.toFixed(2)}%)
                 </span>
@@ -110,7 +116,7 @@ export default function LiquidityIndicators({ symbol, candles, currentPrice }: P
                 {sweep.direction === 'up' ? '⬆️' : '⬇️'} Sweep
               </span>
               <span className="metric-value">
-                ${sweep.price.toFixed(2)}
+                {formatValue(sweep.price)}
                 <span className="text-xs text-gray-400 ml-2">
                   (фитиль: {(sweep.wickSize * 100).toFixed(0)}%)
                 </span>
@@ -133,7 +139,7 @@ export default function LiquidityIndicators({ symbol, candles, currentPrice }: P
                 {structure.icon} {structure.type}
               </span>
               <span className={`metric-value ${structure.direction === 'up' ? 'bullish' : 'bearish'}`}>
-                {structure.direction === 'up' ? '⬆️' : '⬇️'} ${structure.price.toFixed(2)}
+                {structure.direction === 'up' ? '⬆️' : '⬇️'} {formatValue(structure.price)}
                 <span className="text-xs text-gray-400 ml-2">
                   ({(structure.significance * 100).toFixed(0)}%)
                 </span>
@@ -161,15 +167,15 @@ export default function LiquidityIndicators({ symbol, candles, currentPrice }: P
           </div>
           <div className="metric">
             <span className="metric-label">Entry</span>
-            <span className="metric-value">${latestSignal.entryPrice.toFixed(2)}</span>
+            <span className="metric-value">{formatValue(latestSignal.entryPrice)}</span>
           </div>
           <div className="metric">
             <span className="metric-label">Stop Loss</span>
-            <span className="metric-value">${latestSignal.stopLoss.toFixed(2)}</span>
+            <span className="metric-value">{formatValue(latestSignal.stopLoss)}</span>
           </div>
           <div className="metric">
             <span className="metric-label">Take Profit</span>
-            <span className="metric-value">${latestSignal.takeProfit.toFixed(2)}</span>
+            <span className="metric-value">{formatValue(latestSignal.takeProfit)}</span>
           </div>
         </div>
       )}

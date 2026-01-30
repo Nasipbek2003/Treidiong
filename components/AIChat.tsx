@@ -149,6 +149,161 @@ export default function AIChat({ priceData, indicators, analysis, currentPrice, 
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
+  const mtfAnalysis = async () => {
+    setMessages(prev => [...prev, { role: 'user', content: `Анализ рынка (мульти-таймфрейм)` }]);
+    setLoading(true);
+
+    try {
+      // 🔍 ПРОВЕРКА: Убедимся что priceData актуален
+      if (priceData && priceData.length > 0) {
+        const latestCandle = priceData[priceData.length - 1];
+        const priceDiff = Math.abs(latestCandle.close - currentPrice);
+        const priceDiffPercent = (priceDiff / currentPrice) * 100;
+        
+        console.log('📊 Проверка данных перед анализом:');
+        console.log('  Текущая цена:', currentPrice);
+        console.log('  Последняя свеча:', latestCandle.close);
+        console.log('  Разница:', priceDiff.toFixed(2), `(${priceDiffPercent.toFixed(2)}%)`);
+        
+        // Если разница больше 10% - данные устарели
+        if (priceDiffPercent > 10) {
+          setMessages(prev => [...prev, { 
+            role: 'ai', 
+            content: `⚠️ Данные устарели!\n\nГрафик показывает цены около ${latestCandle.close.toFixed(2)}, но текущая цена ${currentPrice.toFixed(2)}.\n\nОбнови страницу (F5) или нажми кнопку 🔄 для загрузки актуальных данных.` 
+          }]);
+          setLoading(false);
+          return;
+        }
+      }
+
+      // ⏱️ ВАЖНО: Принудительно перерисовываем график и ждем
+      console.log('⏱️ Принудительная перерисовка графика...');
+      
+      // Триггерим resize event чтобы график перерисовался
+      window.dispatchEvent(new Event('resize'));
+      
+      // Ждем 500мс чтобы график перерисовался
+      await new Promise(resolve => setTimeout(resolve, 500));
+
+      // Находим canvas с графиком
+      const canvas = document.querySelector('canvas') as HTMLCanvasElement;
+      if (!canvas) {
+        throw new Error('График не найден');
+      }
+
+      console.log('📸 Создание скриншота графика...');
+      console.log('  Canvas размер:', canvas.width, 'x', canvas.height);
+      
+      // Проверяем что canvas не disposed и не пустой
+      let imageBase64: string;
+      try {
+        const ctx = canvas.getContext('2d', { willReadFrequently: true });
+        if (!ctx) {
+          throw new Error('Не удалось получить контекст canvas');
+        }
+        
+        // Проверяем что canvas содержит данные
+        try {
+          const imageData = ctx.getImageData(0, 0, Math.min(canvas.width, 1), Math.min(canvas.height, 1));
+          const hasData = imageData.data.some(pixel => pixel !== 0);
+          console.log('  Canvas содержит данные:', hasData);
+        } catch (e) {
+          console.warn('  Не удалось проверить данные canvas:', e);
+        }
+
+        // Конвертируем canvas в base64
+        imageBase64 = canvas.toDataURL('image/png').split(',')[1];
+      } catch (canvasError: any) {
+        console.error('Ошибка при работе с canvas:', canvasError);
+        throw new Error('График недоступен. Попробуйте еще раз через несколько секунд.');
+      }
+      
+      console.log('✓ Скриншот создан, размер:', Math.round(imageBase64.length / 1024), 'KB');
+      console.log('📤 Отправка на MTF анализ с ценой:', currentPrice);
+
+      const response = await fetch('/api/mtf-analysis', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          imageBase64,
+          context: {
+            asset,
+            currentPrice,
+            indicators,
+            analysis,
+            priceData
+          }
+        })
+      });
+
+      const data = await response.json();
+      
+      if (data.error) {
+        throw new Error(data.error);
+      }
+
+      // Проверяем что получили корректный ответ
+      if (!data.analysis) {
+        throw new Error('Invalid response from MTF API');
+      }
+
+      // Форматируем ответ MTF анализа
+      const mtf = data.analysis;
+      const recIcon = mtf.recommendation === 'BUY' ? '📈' : mtf.recommendation === 'SELL' ? '📉' : '⏸';
+      const recColor = mtf.recommendation === 'BUY' ? '🟢' : mtf.recommendation === 'SELL' ? '🔴' : '🟡';
+      
+      // Форматируем reasoning
+      let reasoningText = '';
+      if (mtf.reasoning && Array.isArray(mtf.reasoning) && mtf.reasoning.length > 0) {
+        reasoningText = `**📋 Причины:**\n${mtf.reasoning.map((r: string) => `• ${r}`).join('\n')}`;
+      }
+      
+      // Добавляем "Следующее действие" для WAIT
+      let nextActionText = '';
+      if (mtf.recommendation === 'WAIT' && mtf.nextAction) {
+        nextActionText = `\n\n**⏭️ Следующее действие:**\n• ${mtf.nextAction}`;
+      }
+      
+      const formattedResponse = `**${recIcon} РЕКОМЕНДАЦИЯ: ${mtf.recommendation}**
+
+**1️⃣ Глобальный тренд (D1)**
+• Направление: ${mtf.d1Trend === 'bullish' ? '📈 Восходящий' : mtf.d1Trend === 'bearish' ? '📉 Нисходящий' : '↔️ Флет'}
+• Структура: ${mtf.d1Structure}
+
+**2️⃣ Фаза рынка (H4)**
+• Фаза: ${mtf.h4Phase === 'impulse' ? '⚡ Импульс' : mtf.h4Phase === 'correction' ? '🔄 Коррекция' : '📊 Консолидация'}
+• Зона: ${mtf.h4Zone}
+
+**3️⃣ Структура рынка (H1)**
+• Локальная структура: ${mtf.h1Structure}
+• Подтверждение D1: ${mtf.h1Confirmation ? '✅ Да' : '❌ Нет'}
+
+**4️⃣ Точка входа (M15/M5)**
+• ${mtf.m15Entry}
+
+${reasoningText}${nextActionText}
+
+${recColor} **Итог: ${mtf.recommendation}**`;
+
+      setMessages(prev => [...prev, { role: 'ai', content: formattedResponse }]);
+    } catch (error: any) {
+      console.error('MTF analysis error:', error);
+      
+      // Специальная обработка для ошибки disposed объекта
+      let errorMessage = error.message;
+      if (error.message && error.message.includes('disposed')) {
+        errorMessage = 'График обновляется. Пожалуйста, попробуйте еще раз через 2-3 секунды.';
+      }
+      
+      setMessages(prev => [...prev, { 
+        role: 'ai', 
+        content: `Ошибка: ${errorMessage}` 
+      }]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const visualAnalysis = async (action: 'BUY' | 'SELL') => {
     setMessages(prev => [...prev, { role: 'user', content: `${action === 'BUY' ? 'Покупка' : 'Продажа'} (${version})` }]);
     setLoading(true);
@@ -219,15 +374,15 @@ export default function AIChat({ priceData, indicators, analysis, currentPrice, 
       }
       
       console.log('✓ Скриншот создан, размер:', Math.round(imageBase64.length / 1024), 'KB');
-      console.log('📤 Отправка на анализ с ценой:', currentPrice);
+      console.log('📤 Отправка на визуальный анализ с ценой:', currentPrice);
 
       const response = await fetch('/api/visual-analysis', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           imageBase64,
-          action: action,
-          version: version,
+          action,
+          version: 'signal-generator',
           context: {
             asset,
             currentPrice,
@@ -244,9 +399,10 @@ export default function AIChat({ priceData, indicators, analysis, currentPrice, 
         throw new Error(data.error);
       }
 
+      // Для режима "Сигналы" API возвращает просто текст в data.response
       setMessages(prev => [...prev, { role: 'ai', content: data.response }]);
     } catch (error: any) {
-      console.error('Visual analysis error:', error);
+      console.error('MTF analysis error:', error);
       
       // Специальная обработка для ошибки disposed объекта
       let errorMessage = error.message;
@@ -610,26 +766,61 @@ export default function AIChat({ priceData, indicators, analysis, currentPrice, 
           </button>
         </div>
         <div style={{ display: 'flex', gap: '10px' }}>
-          <button 
-            className="analysis-btn buy-btn"
-            onClick={() => visualAnalysis('BUY')}
-            disabled={loading}
-          >
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-              <path d="M12 19V5M5 12L12 5L19 12" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-            </svg>
-            Покупка
-          </button>
-          <button 
-            className="analysis-btn sell-btn"
-            onClick={() => visualAnalysis('SELL')}
-            disabled={loading}
-          >
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-              <path d="M12 5V19M5 12L12 19L19 12" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-            </svg>
-            Продажа
-          </button>
+          {version === 'market-analysis' ? (
+            // Для "Анализ рынка" - одна кнопка MTF анализа
+            <button 
+              className="analysis-btn"
+              onClick={() => mtfAnalysis()}
+              disabled={loading}
+              style={{
+                flex: 1,
+                padding: '12px 16px',
+                background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                color: '#fff',
+                border: 'none',
+                borderRadius: '8px',
+                fontSize: '14px',
+                fontWeight: '600',
+                cursor: loading ? 'not-allowed' : 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '8px',
+                transition: 'all 0.3s ease',
+                opacity: loading ? 0.6 : 1
+              }}
+            >
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <circle cx="11" cy="11" r="8" stroke="currentColor" strokeWidth="2"/>
+                <path d="M21 21L16.65 16.65" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
+              </svg>
+              {loading ? 'Анализирую...' : 'Анализ рынка'}
+            </button>
+          ) : (
+            // Для "Сигналы" - кнопки Покупка и Продажа
+            <>
+              <button 
+                className="analysis-btn buy-btn"
+                onClick={() => visualAnalysis('BUY')}
+                disabled={loading}
+              >
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <path d="M12 19V5M5 12L12 5L19 12" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                </svg>
+                Покупка
+              </button>
+              <button 
+                className="analysis-btn sell-btn"
+                onClick={() => visualAnalysis('SELL')}
+                disabled={loading}
+              >
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <path d="M12 5V19M5 12L12 19L19 12" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                </svg>
+                Продажа
+              </button>
+            </>
+          )}
         </div>
       </div>
 
@@ -968,3 +1159,8 @@ export default function AIChat({ priceData, indicators, analysis, currentPrice, 
     </div>
   );
 }
+
+
+
+
+

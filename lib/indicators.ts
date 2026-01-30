@@ -243,3 +243,220 @@ export function calculateAdaptiveStop(
     return entryPrice + (atr * multiplier);
   }
 }
+
+// ADX (Average Directional Index) - сила тренда
+export function calculateADX(data: PriceData[], period: number = 14): {
+  adx: number;
+  plusDI: number;
+  minusDI: number;
+} {
+  if (data.length < period + 1) {
+    return { adx: 0, plusDI: 0, minusDI: 0 };
+  }
+
+  const tr: number[] = [];
+  const plusDM: number[] = [];
+  const minusDM: number[] = [];
+
+  for (let i = 1; i < data.length; i++) {
+    const high = data[i].high;
+    const low = data[i].low;
+    const prevHigh = data[i - 1].high;
+    const prevLow = data[i - 1].low;
+    const prevClose = data[i - 1].close;
+
+    // True Range
+    const trValue = Math.max(
+      high - low,
+      Math.abs(high - prevClose),
+      Math.abs(low - prevClose)
+    );
+    tr.push(trValue);
+
+    // Directional Movement
+    const upMove = high - prevHigh;
+    const downMove = prevLow - low;
+
+    plusDM.push(upMove > downMove && upMove > 0 ? upMove : 0);
+    minusDM.push(downMove > upMove && downMove > 0 ? downMove : 0);
+  }
+
+  // Smoothed averages
+  const atr = calculateSMA(tr.slice(-period), period);
+  const smoothedPlusDM = calculateSMA(plusDM.slice(-period), period);
+  const smoothedMinusDM = calculateSMA(minusDM.slice(-period), period);
+
+  const plusDI = (smoothedPlusDM / atr) * 100;
+  const minusDI = (smoothedMinusDM / atr) * 100;
+
+  const dx = Math.abs(plusDI - minusDI) / (plusDI + minusDI) * 100;
+  const adx = calculateSMA([dx], period);
+
+  return { adx, plusDI, minusDI };
+}
+
+// Stochastic RSI - точные входы на малых таймфреймах
+export function calculateStochasticRSI(prices: number[], period: number = 14, smoothK: number = 3, smoothD: number = 3): {
+  k: number;
+  d: number;
+} {
+  if (prices.length < period + smoothK + smoothD) {
+    return { k: 50, d: 50 };
+  }
+
+  const rsiValues: number[] = [];
+  for (let i = period; i < prices.length; i++) {
+    const slice = prices.slice(i - period, i + 1);
+    rsiValues.push(calculateRSI(slice, period));
+  }
+
+  const recentRSI = rsiValues.slice(-period);
+  const minRSI = Math.min(...recentRSI);
+  const maxRSI = Math.max(...recentRSI);
+  const currentRSI = recentRSI[recentRSI.length - 1];
+
+  const stochRSI = maxRSI !== minRSI ? ((currentRSI - minRSI) / (maxRSI - minRSI)) * 100 : 50;
+
+  // Сглаживание K и D
+  const k = stochRSI;
+  const d = k; // Упрощенная версия, можно добавить SMA для D
+
+  return { k, d };
+}
+
+// SuperTrend - четкие сигналы BUY/SELL
+export function calculateSuperTrend(data: PriceData[], period: number = 10, multiplier: number = 3): {
+  value: number;
+  direction: 'BUY' | 'SELL';
+  trend: number[];
+} {
+  if (data.length < period) {
+    return { value: 0, direction: 'SELL', trend: [] };
+  }
+
+  const atr = calculateATR(data, period);
+  const trend: number[] = [];
+  let direction: 'BUY' | 'SELL' = 'SELL';
+
+  for (let i = 0; i < data.length; i++) {
+    const hl2 = (data[i].high + data[i].low) / 2;
+    const basicUpperBand = hl2 + multiplier * atr;
+    const basicLowerBand = hl2 - multiplier * atr;
+
+    if (data[i].close > basicUpperBand) {
+      direction = 'BUY';
+      trend.push(basicLowerBand);
+    } else if (data[i].close < basicLowerBand) {
+      direction = 'SELL';
+      trend.push(basicUpperBand);
+    } else {
+      trend.push(i > 0 ? trend[i - 1] : hl2);
+    }
+  }
+
+  return {
+    value: trend[trend.length - 1],
+    direction,
+    trend
+  };
+}
+
+// Ichimoku Cloud - комплексный анализ
+export function calculateIchimoku(data: PriceData[]): {
+  tenkan: number;
+  kijun: number;
+  senkouA: number;
+  senkouB: number;
+  chikou: number;
+  signal: 'bullish' | 'bearish' | 'neutral';
+} {
+  if (data.length < 52) {
+    return {
+      tenkan: 0,
+      kijun: 0,
+      senkouA: 0,
+      senkouB: 0,
+      chikou: 0,
+      signal: 'neutral'
+    };
+  }
+
+  // Tenkan-sen (Conversion Line): (9-period high + 9-period low) / 2
+  const tenkanPeriod = 9;
+  const tenkanHigh = Math.max(...data.slice(-tenkanPeriod).map(d => d.high));
+  const tenkanLow = Math.min(...data.slice(-tenkanPeriod).map(d => d.low));
+  const tenkan = (tenkanHigh + tenkanLow) / 2;
+
+  // Kijun-sen (Base Line): (26-period high + 26-period low) / 2
+  const kijunPeriod = 26;
+  const kijunHigh = Math.max(...data.slice(-kijunPeriod).map(d => d.high));
+  const kijunLow = Math.min(...data.slice(-kijunPeriod).map(d => d.low));
+  const kijun = (kijunHigh + kijunLow) / 2;
+
+  // Senkou Span A: (Tenkan + Kijun) / 2, projected 26 periods ahead
+  const senkouA = (tenkan + kijun) / 2;
+
+  // Senkou Span B: (52-period high + 52-period low) / 2, projected 26 periods ahead
+  const senkouBPeriod = 52;
+  const senkouBHigh = Math.max(...data.slice(-senkouBPeriod).map(d => d.high));
+  const senkouBLow = Math.min(...data.slice(-senkouBPeriod).map(d => d.low));
+  const senkouB = (senkouBHigh + senkouBLow) / 2;
+
+  // Chikou Span: Current close, projected 26 periods back
+  const chikou = data[data.length - 1].close;
+
+  // Определение сигнала
+  const currentPrice = data[data.length - 1].close;
+  let signal: 'bullish' | 'bearish' | 'neutral' = 'neutral';
+
+  if (currentPrice > Math.max(senkouA, senkouB) && tenkan > kijun) {
+    signal = 'bullish';
+  } else if (currentPrice < Math.min(senkouA, senkouB) && tenkan < kijun) {
+    signal = 'bearish';
+  }
+
+  return { tenkan, kijun, senkouA, senkouB, chikou, signal };
+}
+
+// OBV (On Balance Volume) - подтверждение движения объемом
+export function calculateOBV(data: PriceData[]): number {
+  if (data.length < 2) return 0;
+
+  let obv = 0;
+  for (let i = 1; i < data.length; i++) {
+    if (data[i].close > data[i - 1].close) {
+      obv += data[i].volume;
+    } else if (data[i].close < data[i - 1].close) {
+      obv -= data[i].volume;
+    }
+    // Если цена не изменилась, OBV остается прежним
+  }
+
+  return obv;
+}
+
+// Анализ дивергенции OBV с ценой
+export function analyzeOBVDivergence(data: PriceData[]): {
+  hasDivergence: boolean;
+  type?: 'bullish' | 'bearish';
+} {
+  if (data.length < 20) return { hasDivergence: false };
+
+  const obv = calculateOBV(data);
+  const prevOBV = calculateOBV(data.slice(0, -10));
+  
+  const currentPrice = data[data.length - 1].close;
+  const prevPrice = data[data.length - 11].close;
+
+  // Бычья дивергенция: цена падает, OBV растет
+  if (currentPrice < prevPrice && obv > prevOBV) {
+    return { hasDivergence: true, type: 'bullish' };
+  }
+
+  // Медвежья дивергенция: цена растет, OBV падает
+  if (currentPrice > prevPrice && obv < prevOBV) {
+    return { hasDivergence: true, type: 'bearish' };
+  }
+
+  return { hasDivergence: false };
+}
